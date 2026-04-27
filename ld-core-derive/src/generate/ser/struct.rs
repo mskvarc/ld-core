@@ -37,8 +37,8 @@ pub fn generate(
 
 			Ok(quote! {
 				visitor.predicate(
-					::linked_data::iref::Iri::new(#rdf_type).unwrap(),
-					::linked_data::iref::Iri::new(#iri).unwrap()
+					::ld_core::iref::Iri::new(#rdf_type).unwrap(),
+					::ld_core::iref::Iri::new(#iri).unwrap()
 				)?;
 			})
 		})
@@ -51,7 +51,7 @@ pub fn generate(
 		Some((field_access, ty)) => {
 			bounds.push(
 				syn::parse2(quote! {
-					#ty: ::linked_data::LinkedDataResource<I_, V_>
+					#ty: ::ld_core::LinkedDataResource<I_, V_>
 				})
 				.unwrap(),
 			);
@@ -61,7 +61,7 @@ pub fn generate(
 			}
 		}
 		None => quote! {
-			::linked_data::ResourceInterpretation::Uninterpreted(None)
+			::ld_core::ResourceInterpretation::Uninterpreted(None)
 		},
 	};
 
@@ -75,50 +75,50 @@ pub fn generate(
 	let (impl_generics, _, where_clause) = ld_generics.split_for_impl();
 
 	Ok(quote! {
-		impl #impl_generics ::linked_data::LinkedDataResource<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataResource<I_, V_> for #ident #ty_generics #where_clause {
 			fn interpretation(
 				&self,
 				vocabulary: &mut V_,
 				interpretation: &mut I_
-			) -> linked_data::ResourceInterpretation<I_, V_> {
+			) -> ld_core::ResourceInterpretation<I_, V_> {
 				#term
 			}
 		}
 
-		impl #impl_generics ::linked_data::LinkedDataSubject<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataSubject<I_, V_> for #ident #ty_generics #where_clause {
 			fn visit_subject<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::linked_data::SubjectVisitor<I_, V_>
+				S_: ::ld_core::SubjectVisitor<I_, V_>
 			{
 				#visit_type
 				#visit
 			}
 		}
 
-		impl #impl_generics ::linked_data::LinkedDataPredicateObjects<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataPredicateObjects<I_, V_> for #ident #ty_generics #where_clause {
 			fn visit_objects<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::linked_data::PredicateObjectsVisitor<I_, V_>
+				S_: ::ld_core::PredicateObjectsVisitor<I_, V_>
 			{
 				visitor.object(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #impl_generics ::linked_data::LinkedDataGraph<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataGraph<I_, V_> for #ident #ty_generics #where_clause {
 			fn visit_graph<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::linked_data::GraphVisitor<I_, V_>
+				S_: ::ld_core::GraphVisitor<I_, V_>
 			{
 				visitor.subject(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #impl_generics ::linked_data::LinkedData<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedData<I_, V_> for #ident #ty_generics #where_clause {
 			fn visit<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::linked_data::Visitor<I_, V_>
+				S_: ::ld_core::Visitor<I_, V_>
 			{
 				visitor.default_graph(self)?;
 				visitor.end()

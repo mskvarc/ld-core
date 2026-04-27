@@ -119,28 +119,26 @@ fn generate_field(
 			interpretation_bounds.iri_mut = true;
 
 			bounds.push(
-				syn::parse2(
-					quote!(#ty: ::linked_data::LinkedDataDeserializePredicateObjects<I_, V_>),
-				)
-				.unwrap(),
+				syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializePredicateObjects<I_, V_>))
+					.unwrap(),
 			);
 
 			Ok(Some(quote! {
-				match vocabulary_.get(unsafe { ::linked_data::iref::Iri::new_unchecked(#iri) }).and_then(|iri| interpretation_.iri_interpretation(&iri)) {
+				match vocabulary_.get(unsafe { ::ld_core::iref::Iri::new_unchecked(#iri) }).and_then(|iri| interpretation_.iri_interpretation(&iri)) {
 					Some(predicate_) => {
 						let context_ = context_.with_predicate(&predicate_);
-						::linked_data::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
+						::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
 							vocabulary_,
 							interpretation_,
 							dataset_,
 							graph_,
-							::linked_data::rdf_types::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
+							::ld_core::rdf_types::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
 							context_
 						)?
 					}
 					None => {
-						let context_ = context_.with_predicate_iri(unsafe {::linked_data::iref::Iri::new_unchecked(#iri) });
-						::linked_data::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
+						let context_ = context_.with_predicate_iri(unsafe {::ld_core::iref::Iri::new_unchecked(#iri) });
+						::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
 							vocabulary_,
 							interpretation_,
 							dataset_,
@@ -155,12 +153,12 @@ fn generate_field(
 		None => {
 			if attrs.is_id || attrs.flatten {
 				bounds.push(
-					syn::parse2(quote!(#ty: ::linked_data::LinkedDataDeserializeSubject<I_, V_>))
+					syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_, V_>))
 						.unwrap(),
 				);
 
 				Ok(Some(quote! {
-					::linked_data::LinkedDataDeserializeSubject::deserialize_subject_in(
+					::ld_core::LinkedDataDeserializeSubject::deserialize_subject_in(
 						vocabulary_,
 						interpretation_,
 						dataset_,

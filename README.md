@@ -18,7 +18,7 @@ feature) that can automatically implement those primitives for you.
 use iref::IriBuf;
 use static_iref::iri;
 
-#[derive(linked_data::Serialize, linked_data::Deserialize)]
+#[derive(ld_core::Serialize, ld_core::Deserialize)]
 #[ld(prefix("ex" = "http://example.org/"))]
 struct Foo {
   #[ld(id)]
@@ -37,7 +37,7 @@ let value = Foo {
   email: "john.smith@example.org".to_owned()
 };
 
-let quads = linked_data::to_quads(rdf_types::generator::Blank::new(), &value)
+let quads = ld_core::to_quads(rdf_types::generator::Blank::new(), &value)
   .expect("RDF serialization failed");
 
 for quad in quads {

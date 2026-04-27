@@ -105,7 +105,7 @@ where
 		&self,
 		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<I, V> {
+	) -> ResourceInterpretation<'_, I, V> {
 		self.object.interpretation(vocabulary, interpretation)
 	}
 }
@@ -234,7 +234,7 @@ where
 		&self,
 		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<I, V> {
+	) -> ResourceInterpretation<'_, I, V> {
 		self.subject.interpretation(vocabulary, interpretation)
 	}
 }
@@ -287,7 +287,7 @@ where
 		&self,
 		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<I, V> {
+	) -> ResourceInterpretation<'_, I, V> {
 		self.graph.interpretation(vocabulary, interpretation)
 	}
 }
