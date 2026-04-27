@@ -1,0 +1,34 @@
+[package]
+name = "ld-core"
+description = "Linked-Data dateset serialization/deserialization traits"
+categories = ["encoding", "web-programming"]
+keywords = ["semantic-web", "linked-data", "rdf", "serialization"]
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+version.workspace = true
+
+[features]
+default = ["derive", "serde"]
+derive = ["ld-core-derive"]
+
+[dependencies]
+rdf-types = "0.22.1"
+xsd-types = "0.9.2"
+static-iref = "3.0"
+json-syntax = { version = "0.12.2", features = ["canonicalize"] }
+educe = "0.4.22"
+im = "15.1.0"
+iref.workspace = true
+thiserror.workspace = true
+ld-core-derive = { workspace = true, optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[dev-dependencies]
+json-syntax = { version = "0.12.2", features = ["serde"] }
+
+[[example]]
+name = "derive"
+required-features = ["derive"]

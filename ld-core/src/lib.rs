@@ -44,7 +44,7 @@
 use educe::Educe;
 use iref::{Iri, IriBuf};
 #[cfg(feature = "derive")]
-pub use linked_data_derive::{Deserialize, Serialize};
+pub use ld_core_derive::{Deserialize, Serialize};
 use rdf_types::{
 	dataset::{PatternMatchingDataset, TraversableDataset},
 	interpretation::ReverseIriInterpretation,

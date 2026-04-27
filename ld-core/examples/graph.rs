@@ -1,5 +1,5 @@
 use iref::IriBuf;
-use linked_data::{to_quads, Deserialize, Serialize};
+use ld_core::{to_quads, Deserialize, Serialize};
 use rdf_types::{generator, RdfDisplay};
 
 #[derive(Serialize, Deserialize)]

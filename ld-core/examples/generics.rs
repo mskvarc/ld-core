@@ -1,5 +1,5 @@
 use iref::Iri;
-use linked_data::{Deserialize, LinkedDataResource, Serialize};
+use ld_core::{Deserialize, LinkedDataResource, Serialize};
 use static_iref::iri;
 
 #[derive(Serialize, Deserialize)]

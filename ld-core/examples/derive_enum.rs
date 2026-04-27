@@ -1,4 +1,4 @@
-use linked_data::{to_quads, Deserialize, LinkedDataResource, Serialize};
+use ld_core::{to_quads, Deserialize, LinkedDataResource, Serialize};
 use rdf_types::{generator, RdfDisplay};
 
 #[derive(Serialize, Deserialize)]
