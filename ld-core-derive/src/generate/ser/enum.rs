@@ -1,4 +1,4 @@
-use iref::{Iri, IriBuf};
+use iri_rs::IriBuf;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, spanned::Spanned};
@@ -6,7 +6,7 @@ use syn::{punctuated::Punctuated, spanned::Spanned};
 use crate::{
 	generate::{
 		extend_generics, read_variant_attributes, InterpretationBounds, TypeAttributes,
-		VariantAttributes, VocabularyBounds,
+		VariantAttributes,
 	},
 	utils::UsesGenericParam,
 };
@@ -20,26 +20,19 @@ pub fn generate(
 	e: syn::DataEnum,
 ) -> Result<TokenStream, Error> {
 	let mut lexical_repr_bounds = Vec::new();
-	let mut lexical_repr_vocabulary_bounds = VocabularyBounds::default();
 	let mut lexical_repr_cases = Vec::new();
 
 	let mut visit_subject_bounds = Vec::new();
-	let mut visit_subject_vocabulary_bounds = VocabularyBounds::default();
 	let mut visit_subject_cases = Vec::new();
 
 	let mut visit_predicate_bounds = Vec::new();
-	let mut visit_predicate_vocabulary_bounds = VocabularyBounds::default();
 	let mut visit_predicate_cases = Vec::new();
 
 	let mut visit_graph_bounds = Vec::new();
-	let mut visit_graph_vocabulary_bounds = VocabularyBounds::default();
 	let mut visit_graph_cases = Vec::new();
 
 	let mut visit_ld_bounds = Vec::new();
-	let mut visit_ld_vocabulary_bounds = VocabularyBounds::default();
 	let mut visit_ld_cases = Vec::new();
-
-	// let mut visit_objects;
 
 	let mut nested = false;
 	let mut last_variant_span = None;
@@ -68,13 +61,8 @@ pub fn generate(
 		let variant_id = &variant.ident;
 		let input = &variant.input;
 
-		let lexical_repr_case = variant_interpret(
-			&variant,
-			nest.as_deref(),
-			&shape,
-			&mut lexical_repr_bounds,
-			&mut lexical_repr_vocabulary_bounds,
-		);
+		let lexical_repr_case =
+			variant_interpret(&variant, nest.as_ref(), &shape, &mut lexical_repr_bounds);
 
 		lexical_repr_cases.push(quote! {
 			Self::#variant_id #input => {
@@ -82,13 +70,8 @@ pub fn generate(
 			}
 		});
 
-		let visit_subject_case = variant_visit_subject(
-			&variant,
-			nest.as_deref(),
-			&shape,
-			&mut visit_subject_bounds,
-			&mut visit_subject_vocabulary_bounds,
-		);
+		let visit_subject_case =
+			variant_visit_subject(&variant, nest.as_ref(), &shape, &mut visit_subject_bounds);
 
 		visit_subject_cases.push(quote! {
 			Self::#variant_id #input => {
@@ -96,13 +79,8 @@ pub fn generate(
 			}
 		});
 
-		let visit_predicate_case = variant_visit_predicate(
-			&variant,
-			nest.as_deref(),
-			&shape,
-			&mut visit_predicate_bounds,
-			&mut visit_predicate_vocabulary_bounds,
-		);
+		let visit_predicate_case =
+			variant_visit_predicate(&variant, nest.as_ref(), &shape, &mut visit_predicate_bounds);
 
 		visit_predicate_cases.push(quote! {
 			Self::#variant_id #input => {
@@ -110,13 +88,8 @@ pub fn generate(
 			}
 		});
 
-		let visit_graph_case = variant_visit_graph(
-			&variant,
-			nest.as_deref(),
-			&shape,
-			&mut visit_graph_bounds,
-			&mut visit_graph_vocabulary_bounds,
-		);
+		let visit_graph_case =
+			variant_visit_graph(&variant, nest.as_ref(), &shape, &mut visit_graph_bounds);
 
 		visit_graph_cases.push(quote! {
 			Self::#variant_id #input => {
@@ -124,13 +97,8 @@ pub fn generate(
 			}
 		});
 
-		let visit_ld_case = variant_serialize(
-			&variant,
-			nest.as_deref(),
-			&shape,
-			&mut visit_ld_bounds,
-			&mut visit_ld_vocabulary_bounds,
-		);
+		let visit_ld_case =
+			variant_serialize(&variant, nest.as_ref(), &shape, &mut visit_ld_bounds);
 
 		visit_ld_cases.push(quote! {
 			Self::#variant_id #input => {
@@ -147,47 +115,30 @@ pub fn generate(
 
 	lexical_repr_bounds.push(
 		syn::parse2(quote! {
-			V_: ::ld_core::rdf_types::Vocabulary
-		})
-		.unwrap(),
-	);
-	lexical_repr_bounds.push(
-		syn::parse2(quote! {
-			I_: ::ld_core::rdf_types::Interpretation
+			I_: ::ld_core::rdf_rs::Interpretation
 		})
 		.unwrap(),
 	);
 
 	let repr_generics = extend_generics(
 		&generics,
-		lexical_repr_vocabulary_bounds,
 		InterpretationBounds::default(),
 		lexical_repr_bounds,
 	);
 	let subject_generics = extend_generics(
 		&generics,
-		visit_subject_vocabulary_bounds,
 		InterpretationBounds::default(),
 		visit_subject_bounds,
 	);
 	let predicate_generics = extend_generics(
 		&generics,
-		visit_predicate_vocabulary_bounds,
 		InterpretationBounds::default(),
 		visit_predicate_bounds,
 	);
-	let graph_generics = extend_generics(
-		&generics,
-		visit_graph_vocabulary_bounds,
-		InterpretationBounds::default(),
-		visit_graph_bounds,
-	);
-	let dataset_generics = extend_generics(
-		&generics,
-		visit_ld_vocabulary_bounds,
-		InterpretationBounds::default(),
-		visit_ld_bounds,
-	);
+	let graph_generics =
+		extend_generics(&generics, InterpretationBounds::default(), visit_graph_bounds);
+	let dataset_generics =
+		extend_generics(&generics, InterpretationBounds::default(), visit_ld_bounds);
 
 	let (_, ty_generics, _) = generics.split_for_impl();
 	let (repr_impl_generics, _, repr_where_clauses) = repr_generics.split_for_impl();
@@ -199,22 +150,21 @@ pub fn generate(
 	Ok(quote! {
 		#(#compound_types)*
 
-		impl #repr_impl_generics ::ld_core::LinkedDataResource<I_, V_> for #ident #ty_generics #repr_where_clauses {
+		impl #repr_impl_generics ::ld_core::LinkedDataResource<I_> for #ident #ty_generics #repr_where_clauses {
 			fn interpretation(
 				&self,
-				vocabulary: &mut V_,
 				interpretation: &mut I_
-			) -> ld_core::ResourceInterpretation<I_, V_> {
+			) -> ::ld_core::ResourceInterpretation<'_, I_> {
 				match self {
 					#(#lexical_repr_cases)*
 				}
 			}
 		}
 
-		impl #subject_impl_generics ::ld_core::LinkedDataSubject<I_, V_> for #ident #ty_generics #subject_where_clauses {
+		impl #subject_impl_generics ::ld_core::LinkedDataSubject<I_> for #ident #ty_generics #subject_where_clauses {
 			fn visit_subject<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::SubjectVisitor<I_, V_>
+				S_: ::ld_core::SubjectVisitor<I_>
 			{
 				match self {
 					#(#visit_subject_cases)*
@@ -222,10 +172,10 @@ pub fn generate(
 			}
 		}
 
-		impl #predicate_impl_generics ::ld_core::LinkedDataPredicateObjects<I_, V_> for #ident #ty_generics #predicate_where_clauses {
+		impl #predicate_impl_generics ::ld_core::LinkedDataPredicateObjects<I_> for #ident #ty_generics #predicate_where_clauses {
 			fn visit_objects<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::PredicateObjectsVisitor<I_, V_>
+				S_: ::ld_core::PredicateObjectsVisitor<I_>
 			{
 				match self {
 					#(#visit_predicate_cases)*
@@ -233,10 +183,10 @@ pub fn generate(
 			}
 		}
 
-		impl #graph_impl_generics ::ld_core::LinkedDataGraph<I_, V_> for #ident #ty_generics #graph_where_clauses {
+		impl #graph_impl_generics ::ld_core::LinkedDataGraph<I_> for #ident #ty_generics #graph_where_clauses {
 			fn visit_graph<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::GraphVisitor<I_, V_>
+				S_: ::ld_core::GraphVisitor<I_>
 			{
 				match self {
 					#(#visit_graph_cases)*
@@ -244,10 +194,10 @@ pub fn generate(
 			}
 		}
 
-		impl #dataset_impl_generics ::ld_core::LinkedData<I_, V_> for #ident #ty_generics #dataset_where_clauses {
+		impl #dataset_impl_generics ::ld_core::LinkedData<I_> for #ident #ty_generics #dataset_where_clauses {
 			fn visit<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::Visitor<I_, V_>
+				S_: ::ld_core::Visitor<I_>
 			{
 				match self {
 					#(#visit_ld_cases)*
@@ -296,11 +246,10 @@ impl UsesGenericParam for StrippedVariant {
 }
 
 fn variant_interpret(
-	variant: &StrippedVariant,
-	nest: Option<&Iri>,
+	_variant: &StrippedVariant,
+	nest: Option<&IriBuf>,
 	shape: &VariantShape,
 	bounds: &mut Vec<syn::WherePredicate>,
-	vocabulary_bounds: &mut VocabularyBounds,
 ) -> TokenStream {
 	match nest {
 		Some(iri) => match shape {
@@ -318,18 +267,11 @@ fn variant_interpret(
 			}
 			VariantShape::Unit => {
 				let iri_str = iri.as_str();
-				vocabulary_bounds.iri_mut = true;
 				quote! {
 					::ld_core::ResourceInterpretation::Uninterpreted(Some(
 						::ld_core::CowRdfTerm::Owned(
-							::ld_core::rdf_types::Term::Id(
-								::ld_core::rdf_types::Id::Iri(
-									vocabulary.insert(unsafe {
-										::ld_core::iref::Iri::new_unchecked(
-											#iri_str
-										)
-									})
-								)
+							::ld_core::OwnedRdfTerm::Iri(
+								::ld_core::iri_rs::IriBuf::new(#iri_str.to_owned()).unwrap()
 							)
 						)
 					))
@@ -340,15 +282,14 @@ fn variant_interpret(
 			VariantShape::Simple(id, ty) => {
 				bounds.push(
 					syn::parse2(quote! {
-						#ty: ::ld_core::LinkedDataResource<I_, V_>
+						#ty: ::ld_core::LinkedDataResource<I_>
 					})
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedDataResource<I_, V_>>::interpretation(
+					<#ty as ::ld_core::LinkedDataResource<I_>>::interpretation(
 						#id,
-						vocabulary,
 						interpretation
 					)
 				}
@@ -356,10 +297,10 @@ fn variant_interpret(
 			VariantShape::Compound(inner_ty) => {
 				bounds.extend(inner_ty.lexical_repr_bounds.iter().cloned());
 				let inner_id = &inner_ty.ident;
-				let input = &variant.input;
+				let input = &_variant.input;
 
 				quote! {
-					::ld_core::LinkedDataResourceRef::interpretation_ref(&#inner_id #input, vocabulary, interpretation)
+					::ld_core::LinkedDataResourceRef::interpretation_ref(&#inner_id #input, interpretation)
 				}
 			}
 			VariantShape::Unit => {
@@ -373,28 +314,26 @@ fn variant_interpret(
 
 fn variant_visit_subject(
 	variant: &StrippedVariant,
-	nest: Option<&Iri>,
+	nest: Option<&IriBuf>,
 	shape: &VariantShape,
 	bounds: &mut Vec<syn::WherePredicate>,
-	vocabulary_bounds: &mut VocabularyBounds,
 ) -> TokenStream {
 	match nest {
 		Some(iri) => {
-			vocabulary_bounds.iri_mut = true;
 			let iri = iri.as_str();
 
 			match shape {
 				VariantShape::Simple(id, ty) => {
 					bounds.push(
 						syn::parse2(quote! {
-							#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_>
+							#ty: ::ld_core::LinkedDataPredicateObjects<I_>
 						})
 						.unwrap(),
 					);
 
 					quote! {
 						visitor.predicate(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
+							&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap(),
 							#id
 						)?;
 						visitor.end()
@@ -405,11 +344,10 @@ fn variant_visit_subject(
 					let input = &variant.input;
 
 					bounds.extend(inner_ty.visit_bounds.iter().cloned());
-					vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 					quote! {
 						visitor.predicate(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
+							&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap(),
 							&#inner_id #input
 						)?;
 
@@ -427,13 +365,13 @@ fn variant_visit_subject(
 			VariantShape::Simple(id, ty) => {
 				bounds.push(
 					syn::parse2(quote! {
-						#ty: ::ld_core::LinkedDataSubject<I_, V_>
+						#ty: ::ld_core::LinkedDataSubject<I_>
 					})
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedDataSubject<I_, V_>>::visit_subject(#id, visitor)
+					<#ty as ::ld_core::LinkedDataSubject<I_>>::visit_subject(#id, visitor)
 				}
 			}
 			VariantShape::Compound(inner_ty) => {
@@ -441,7 +379,6 @@ fn variant_visit_subject(
 				let input = &variant.input;
 
 				bounds.extend(inner_ty.visit_bounds.iter().cloned());
-				vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 				quote! {
 					#inner_id #input .visit_subject(visitor)
@@ -458,30 +395,28 @@ fn variant_visit_subject(
 
 fn variant_visit_predicate(
 	variant: &StrippedVariant,
-	nest: Option<&Iri>,
+	nest: Option<&IriBuf>,
 	shape: &VariantShape,
 	bounds: &mut Vec<syn::WherePredicate>,
-	vocabulary_bounds: &mut VocabularyBounds,
 ) -> TokenStream {
 	match nest {
 		Some(iri) => {
 			let iri = iri.as_str();
-			vocabulary_bounds.iri_mut = true;
 
 			match shape {
 				VariantShape::Simple(id, ty) => {
 					bounds.push(
 						syn::parse2(quote! {
-							#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_> + ::ld_core::LinkedDataResource<I_, V_>
+							#ty: ::ld_core::LinkedDataPredicateObjects<I_> + ::ld_core::LinkedDataResource<I_>
 						})
 						.unwrap(),
 					);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							#id
-						).visit_objects(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), #id).visit_objects(visitor)
+						}
 					}
 				}
 				VariantShape::Compound(inner_ty) => {
@@ -489,18 +424,17 @@ fn variant_visit_predicate(
 					let input = &variant.input;
 
 					bounds.extend(inner_ty.visit_bounds.iter().cloned());
-					vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							&#inner_id #input
-						).visit_objects(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), &#inner_id #input).visit_objects(visitor)
+						}
 					}
 				}
 				VariantShape::Unit => {
 					quote! {
-						visitor.object(::ld_core::iref::Iri::new(#iri).unwrap())?;
+						visitor.object(&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap())?;
 						visitor.end()
 					}
 				}
@@ -510,13 +444,13 @@ fn variant_visit_predicate(
 			VariantShape::Simple(id, ty) => {
 				bounds.push(
 					syn::parse2(quote! {
-						#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_>
+						#ty: ::ld_core::LinkedDataPredicateObjects<I_>
 					})
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedDataPredicateObjects<I_, V_>>::visit_objects(#id, visitor)
+					<#ty as ::ld_core::LinkedDataPredicateObjects<I_>>::visit_objects(#id, visitor)
 				}
 			}
 			VariantShape::Compound(inner_ty) => {
@@ -524,7 +458,6 @@ fn variant_visit_predicate(
 				let input = &variant.input;
 
 				bounds.extend(inner_ty.visit_bounds.iter().cloned());
-				vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 				quote! {
 					#inner_id #input .visit_objects(visitor)
@@ -541,30 +474,28 @@ fn variant_visit_predicate(
 
 fn variant_visit_graph(
 	variant: &StrippedVariant,
-	nest: Option<&Iri>,
+	nest: Option<&IriBuf>,
 	shape: &VariantShape,
 	bounds: &mut Vec<syn::WherePredicate>,
-	vocabulary_bounds: &mut VocabularyBounds,
 ) -> TokenStream {
 	match nest {
 		Some(iri) => {
 			let iri = iri.as_str();
-			vocabulary_bounds.iri_mut = true;
 
 			match shape {
 				VariantShape::Simple(id, ty) => {
 					bounds.push(
 						syn::parse2(quote! {
-							#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_> + ::ld_core::LinkedDataResource<I_, V_>
+							#ty: ::ld_core::LinkedDataPredicateObjects<I_> + ::ld_core::LinkedDataResource<I_>
 						})
 						.unwrap(),
 					);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							#id
-						).visit_graph(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), #id).visit_graph(visitor)
+						}
 					}
 				}
 				VariantShape::Compound(inner_ty) => {
@@ -572,18 +503,17 @@ fn variant_visit_graph(
 					let input = &variant.input;
 
 					bounds.extend(inner_ty.visit_bounds.iter().cloned());
-					vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							&#inner_id #input
-						).visit_graph(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), &#inner_id #input).visit_graph(visitor)
+						}
 					}
 				}
 				VariantShape::Unit => {
 					quote! {
-						visitor.subject(::ld_core::iref::Iri::new(#iri).unwrap())?;
+						visitor.subject(&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap())?;
 						visitor.end()
 					}
 				}
@@ -593,13 +523,13 @@ fn variant_visit_graph(
 			VariantShape::Simple(id, ty) => {
 				bounds.push(
 					syn::parse2(quote! {
-						#ty: ::ld_core::LinkedDataGraph<I_, V_>
+						#ty: ::ld_core::LinkedDataGraph<I_>
 					})
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedDataGraph<I_, V_>>::visit_graph(#id, visitor)
+					<#ty as ::ld_core::LinkedDataGraph<I_>>::visit_graph(#id, visitor)
 				}
 			}
 			VariantShape::Compound(inner_ty) => {
@@ -607,7 +537,6 @@ fn variant_visit_graph(
 				let input = &variant.input;
 
 				bounds.extend(inner_ty.visit_bounds.iter().cloned());
-				vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 				quote! {
 					#inner_id #input .visit_graph(visitor)
@@ -624,30 +553,28 @@ fn variant_visit_graph(
 
 fn variant_serialize(
 	variant: &StrippedVariant,
-	nest: Option<&Iri>,
+	nest: Option<&IriBuf>,
 	shape: &VariantShape,
 	bounds: &mut Vec<syn::WherePredicate>,
-	vocabulary_bounds: &mut VocabularyBounds,
 ) -> TokenStream {
 	match nest {
 		Some(iri) => {
 			let iri = iri.as_str();
-			vocabulary_bounds.iri_mut = true;
 
 			match shape {
 				VariantShape::Simple(id, ty) => {
 					bounds.push(
 						syn::parse2(quote! {
-							#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_> + ::ld_core::LinkedDataResource<I_, V_>
+							#ty: ::ld_core::LinkedDataPredicateObjects<I_> + ::ld_core::LinkedDataResource<I_>
 						})
 						.unwrap(),
 					);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							#id
-						).visit(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), #id).visit(visitor)
+						}
 					}
 				}
 				VariantShape::Compound(inner_ty) => {
@@ -655,18 +582,17 @@ fn variant_serialize(
 					let input = &variant.input;
 
 					bounds.extend(inner_ty.visit_bounds.iter().cloned());
-					vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 					quote! {
-						::ld_core::AnonymousBinding(
-							::ld_core::iref::Iri::new(#iri).unwrap(),
-							&#inner_id #input
-						).visit(visitor)
+						{
+							let _iri = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+							::ld_core::AnonymousBinding::new(_iri.as_ref(), &#inner_id #input).visit(visitor)
+						}
 					}
 				}
 				VariantShape::Unit => {
 					quote! {
-						visitor.default_graph(::ld_core::iref::Iri::new(#iri).unwrap())?;
+						visitor.default_graph(&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap())?;
 						visitor.end()
 					}
 				}
@@ -676,13 +602,13 @@ fn variant_serialize(
 			VariantShape::Simple(id, ty) => {
 				bounds.push(
 					syn::parse2(quote! {
-						#ty: ::ld_core::LinkedData<I_, V_>
+						#ty: ::ld_core::LinkedData<I_>
 					})
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedData<I_, V_>>::visit(#id, visitor)
+					<#ty as ::ld_core::LinkedData<I_>>::visit(#id, visitor)
 				}
 			}
 			VariantShape::Compound(inner_ty) => {
@@ -690,7 +616,6 @@ fn variant_serialize(
 				let input = &variant.input;
 
 				bounds.extend(inner_ty.visit_bounds.iter().cloned());
-				vocabulary_bounds.add(inner_ty.visit_vocabulary_bounds);
 
 				quote! {
 					#inner_id #input .visit(visitor)
@@ -709,7 +634,6 @@ struct VariantSubjectType {
 	ident: Ident,
 	lexical_repr_bounds: Vec<syn::WherePredicate>,
 	visit_bounds: Vec<syn::WherePredicate>,
-	visit_vocabulary_bounds: VocabularyBounds,
 	definition: TokenStream,
 }
 
@@ -757,27 +681,26 @@ fn variant_subject_type(
 
 	let mut lexical_repr_bounds = Vec::new();
 	let mut visit_bounds = compound_fields.visit.bounds;
-	let visit_vocabulary_bounds = compound_fields.visit.vocabulary_bounds;
 	let visit_body = &compound_fields.visit.body;
 
 	let term = match compound_fields.id_field {
 		Some((field_access, ty)) => {
 			lexical_repr_bounds.push(
 				syn::parse2(quote! {
-					#ty: ::ld_core::LinkedDataResource<I_, V_>
+					#ty: ::ld_core::LinkedDataResource<I_>
 				})
 				.unwrap(),
 			);
 
 			visit_bounds.push(
 				syn::parse2(quote! {
-					#ty: ::ld_core::LinkedDataResource<I_, V_>
+					#ty: ::ld_core::LinkedDataResource<I_>
 				})
 				.unwrap(),
 			);
 
 			quote! {
-				<#ty as ::ld_core::LinkedDataResource::<I_, V_>>::interpretation(&#field_access, vocabulary, interpretation)
+				<#ty as ::ld_core::LinkedDataResource::<I_>>::interpretation(&#field_access, interpretation)
 			}
 		}
 		None => quote! {
@@ -812,13 +735,11 @@ fn variant_subject_type(
 
 	let repr_generics = extend_generics(
 		&nest_generics,
-		VocabularyBounds::default(),
 		InterpretationBounds::default(),
 		lexical_repr_bounds.clone(),
 	);
 	let visit_generics = extend_generics(
 		&nest_generics,
-		visit_vocabulary_bounds,
 		InterpretationBounds::default(),
 		visit_bounds.clone(),
 	);
@@ -831,62 +752,60 @@ fn variant_subject_type(
 		#[allow(non_camel_case_types)]
 		struct #subject_id #def_ty_generics #borrowed_fields;
 
-		impl #repr_impl_generics ::ld_core::LinkedDataResource<I_, V_> for #subject_id #ty_generics #repr_where_clauses {
+		impl #repr_impl_generics ::ld_core::LinkedDataResource<I_> for #subject_id #ty_generics #repr_where_clauses {
 			fn interpretation(
 				&self,
-				vocabulary: &mut V_,
 				interpretation: &mut I_,
-			) -> ld_core::ResourceInterpretation<I_, V_> {
+			) -> ::ld_core::ResourceInterpretation<'_, I_> {
 				let #subject_id #input = self;
 				#term
 			}
 		}
 
-		impl #repr_impl_generics ::ld_core::LinkedDataResourceRef<'_nest, I_, V_> for #subject_id #ty_generics #repr_where_clauses {
+		impl #repr_impl_generics ::ld_core::LinkedDataResourceRef<'_nest, I_> for #subject_id #ty_generics #repr_where_clauses {
 			fn interpretation_ref(
 				&self,
-				vocabulary: &mut V_,
 				interpretation: &mut I_,
-			) -> ld_core::ResourceInterpretation<'_nest, I_, V_> {
+			) -> ::ld_core::ResourceInterpretation<'_nest, I_> {
 				let #subject_id #input = self;
 				#term
 			}
 		}
 
-		impl #visit_impl_generics ::ld_core::LinkedDataSubject<I_, V_> for #subject_id #ty_generics #visit_where_clauses {
+		impl #visit_impl_generics ::ld_core::LinkedDataSubject<I_> for #subject_id #ty_generics #visit_where_clauses {
 			fn visit_subject<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::SubjectVisitor<I_, V_>
+				S_: ::ld_core::SubjectVisitor<I_>
 			{
 				let #subject_id #input = self;
 				#visit_body
 			}
 		}
 
-		impl #visit_impl_generics ::ld_core::LinkedDataPredicateObjects<I_, V_> for #subject_id #ty_generics #visit_where_clauses {
+		impl #visit_impl_generics ::ld_core::LinkedDataPredicateObjects<I_> for #subject_id #ty_generics #visit_where_clauses {
 			fn visit_objects<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::PredicateObjectsVisitor<I_, V_>
+				S_: ::ld_core::PredicateObjectsVisitor<I_>
 			{
 				visitor.object(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #visit_impl_generics ::ld_core::LinkedDataGraph<I_, V_> for #subject_id #ty_generics #visit_where_clauses {
+		impl #visit_impl_generics ::ld_core::LinkedDataGraph<I_> for #subject_id #ty_generics #visit_where_clauses {
 			fn visit_graph<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::GraphVisitor<I_, V_>
+				S_: ::ld_core::GraphVisitor<I_>
 			{
 				visitor.subject(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #visit_impl_generics ::ld_core::LinkedData<I_, V_> for #subject_id #ty_generics #visit_where_clauses {
+		impl #visit_impl_generics ::ld_core::LinkedData<I_> for #subject_id #ty_generics #visit_where_clauses {
 			fn visit<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::Visitor<I_, V_>
+				S_: ::ld_core::Visitor<I_>
 			{
 				visitor.default_graph(self)?;
 				visitor.end()
@@ -898,7 +817,6 @@ fn variant_subject_type(
 		ident: subject_id,
 		lexical_repr_bounds,
 		visit_bounds,
-		visit_vocabulary_bounds,
 		definition,
 	})
 }

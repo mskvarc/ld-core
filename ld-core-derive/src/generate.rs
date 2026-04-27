@@ -1,16 +1,15 @@
 use std::collections::HashMap;
 
-use iref::{InvalidIri, Iri, IriBuf};
+use iri_rs::{InvalidIri, IriBuf};
 use proc_macro2::{Span, TokenStream, TokenTree};
-use quote::{format_ident, quote, ToTokens};
-use static_iref::iri;
+use quote::{ToTokens, format_ident, quote};
 
 use syn::{punctuated::Punctuated, spanned::Spanned};
 
 pub mod de;
 pub mod ser;
 
-const RDF_TYPE: &Iri = iri!("http://www.w3.org/1999/02/22-rdf-syntax-ns#type");
+const RDF_TYPE: &str = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -81,7 +80,7 @@ pub struct CompactIri(IriBuf, Span);
 
 impl CompactIri {
 	pub fn expand(&self, prefixes: &HashMap<String, String>) -> Result<IriBuf, Error> {
-		let (prefix, suffix) = self.0.split_once(':').unwrap();
+		let (prefix, suffix) = self.0.as_str().split_once(':').unwrap();
 		match prefixes.get(prefix) {
 			Some(expanded_prefix) => IriBuf::new(format!("{expanded_prefix}{suffix}"))
 				.map_err(|InvalidIri(s)| Error::InvalidIri(s, self.1)),
@@ -108,58 +107,49 @@ pub struct VariantAttributes {
 }
 
 #[derive(Default, Clone, Copy)]
-pub struct VocabularyBounds {
-	pub iri_mut: bool,
-}
-
-impl VocabularyBounds {
-	pub fn add(&mut self, other: Self) {
-		self.iri_mut |= other.iri_mut
-	}
-}
-
-impl ToTokens for VocabularyBounds {
-	fn to_tokens(&self, tokens: &mut TokenStream) {
-		tokens.extend(quote! {
-			::ld_core::rdf_types::Vocabulary
-		});
-
-		if self.iri_mut {
-			tokens.extend(quote! {
-				+ ::ld_core::rdf_types::vocabulary::IriVocabularyMut
-			})
-		}
-	}
-}
-
-#[derive(Default, Clone, Copy)]
 pub struct InterpretationBounds {
-	pub iri_mut: bool,
-	pub reverse_iri: bool,
+	pub mut_: bool,
+	pub local_mut: bool,
+	pub reverse: bool,
+	pub reverse_local: bool,
 }
 
 impl InterpretationBounds {
 	pub fn add(&mut self, other: Self) {
-		self.iri_mut |= other.iri_mut;
-		self.reverse_iri |= other.reverse_iri
+		self.mut_ |= other.mut_;
+		self.local_mut |= other.local_mut;
+		self.reverse |= other.reverse;
+		self.reverse_local |= other.reverse_local;
 	}
 }
 
 impl ToTokens for InterpretationBounds {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		tokens.extend(quote! {
-			::ld_core::rdf_types::Interpretation
+			::ld_core::rdf_rs::Interpretation
 		});
 
-		if self.iri_mut {
+		if self.mut_ {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_types::interpretation::IriInterpretation<V_::Iri>
+				+ ::ld_core::rdf_rs::InterpretationMut
 			})
 		}
 
-		if self.reverse_iri {
+		if self.local_mut {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_types::interpretation::ReverseIriInterpretation<Iri = V_::Iri>
+				+ ::ld_core::rdf_rs::interpretation::LocalInterpretationMut
+			})
+		}
+
+		if self.reverse {
+			tokens.extend(quote! {
+				+ ::ld_core::rdf_rs::interpretation::ReverseInterpretation
+			})
+		}
+
+		if self.reverse_local {
+			tokens.extend(quote! {
+				+ ::ld_core::rdf_rs::interpretation::ReverseLocalInterpretation
 			})
 		}
 	}
@@ -167,8 +157,7 @@ impl ToTokens for InterpretationBounds {
 
 fn extend_generics(
 	generics: &syn::Generics,
-	vocabulary_bounds: VocabularyBounds,
-	interpertation_bounds: InterpretationBounds,
+	interpretation_bounds: InterpretationBounds,
 	mut bounds: Vec<syn::WherePredicate>,
 ) -> syn::Generics {
 	let mut result = generics.clone();
@@ -182,28 +171,23 @@ fn extend_generics(
 		default: None,
 	}));
 
-	result.params.push(syn::GenericParam::Type(syn::TypeParam {
-		attrs: Vec::new(),
-		ident: format_ident!("V_"),
-		colon_token: None,
-		bounds: Punctuated::new(),
-		eq_token: None,
-		default: None,
-	}));
+	let needs_resource_bound = interpretation_bounds.reverse || interpretation_bounds.reverse_local;
 
 	bounds.push(
 		syn::parse2(quote! {
-			I_: #interpertation_bounds
+			I_: #interpretation_bounds
 		})
 		.unwrap(),
 	);
 
-	bounds.push(
-		syn::parse2(quote! {
-			V_: #vocabulary_bounds
-		})
-		.unwrap(),
-	);
+	if needs_resource_bound {
+		bounds.push(
+			syn::parse2(quote! {
+				<I_ as ::ld_core::rdf_rs::Interpretation>::Resource: ::ld_core::rdf_rs::Resource
+			})
+			.unwrap(),
+		);
+	}
 
 	let where_clause = result.where_clause.get_or_insert(syn::WhereClause {
 		where_token: Default::default(),
@@ -398,7 +382,10 @@ fn read_field_attributes(attributes: Vec<syn::Attribute>) -> Result<FieldAttribu
 								} else if id == "id" {
 									is_id = true
 								} else if id == "type" {
-									iri = Some(CompactIri(RDF_TYPE.to_owned(), id.span()));
+									iri = Some(CompactIri(
+										IriBuf::new(RDF_TYPE.to_owned()).unwrap(),
+										id.span(),
+									));
 								} else if id == "graph" {
 									graph_value = true
 								} else {
@@ -518,7 +505,7 @@ fn read_variant_attribute(tokens: TokenStream, span: Span) -> Result<VariantAttr
 			}
 		}
 		Some(TokenTree::Ident(id)) if id == "type" => Ok(VariantAttribute::Iri(CompactIri(
-			RDF_TYPE.to_owned(),
+			IriBuf::new(RDF_TYPE.to_owned()).unwrap(),
 			id.span(),
 		))),
 		Some(token) => Err(Error::InvalidAttribute(

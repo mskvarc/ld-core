@@ -2,7 +2,7 @@ use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use syn::{spanned::Spanned, DeriveInput};
 
-use super::{read_field_attributes, read_type_attributes, Error, TypeAttributes, VocabularyBounds};
+use super::{read_field_attributes, read_type_attributes, Error, TypeAttributes};
 
 mod r#enum;
 mod r#struct;
@@ -19,7 +19,6 @@ pub fn subject(input: DeriveInput) -> Result<TokenStream, Error> {
 #[derive(Default)]
 pub struct FieldsVisitor {
 	bounds: Vec<syn::WherePredicate>,
-	vocabulary_bounds: VocabularyBounds,
 	body: TokenStream,
 }
 
@@ -62,45 +61,44 @@ fn variant_compound_fields(
 			let visit_field = if field_attrs.flatten {
 				visit.bounds.push(
 					syn::parse2(quote!(
-						#ty: ::ld_core::LinkedDataSubject<I_, V_>
+						#ty: ::ld_core::LinkedDataSubject<I_>
 					))
 					.unwrap(),
 				);
 
 				quote! {
-					<#ty as ::ld_core::LinkedDataSubject<I_, V_>>::visit_subject(#field_ref, &mut visitor)?;
+					<#ty as ::ld_core::LinkedDataSubject<I_>>::visit_subject(#field_ref, &mut visitor)?;
 				}
 			} else {
 				match field_attrs.iri {
 					Some(compact_iri) => {
-						let iri = compact_iri.expand(&attrs.prefixes)?.into_string();
-						visit.vocabulary_bounds.iri_mut = true;
+						let iri = compact_iri.expand(&attrs.prefixes)?.to_string();
 
 						if field_attrs.graph_value {
 							visit.bounds.push(
 								syn::parse2(quote!(
-									#ty: ::ld_core::LinkedDataGraph<I_, V_>
+									#ty: ::ld_core::LinkedDataGraph<I_>
 								))
 								.unwrap(),
 							);
 
 							quote! {
 								visitor.predicate(
-									::ld_core::iref::Iri::new(#iri).unwrap(),
+									&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap(),
 									&Some(::ld_core::AnonymousGraph(#field_ref))
 								)?;
 							}
 						} else {
 							visit.bounds.push(
 								syn::parse2(quote!(
-									#ty: ::ld_core::LinkedDataPredicateObjects<I_, V_>
+									#ty: ::ld_core::LinkedDataPredicateObjects<I_>
 								))
 								.unwrap(),
 							);
 
 							quote! {
 								visitor.predicate(
-									::ld_core::iref::Iri::new(#iri).unwrap(),
+									&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap(),
 									#field_ref
 								)?;
 							}

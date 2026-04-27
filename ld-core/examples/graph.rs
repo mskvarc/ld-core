@@ -1,6 +1,6 @@
-use iref::IriBuf;
+use iri_rs::IriBuf;
 use ld_core::{to_quads, Deserialize, Serialize};
-use rdf_types::{generator, RdfDisplay};
+use ld_core::rdf_rs::{generator, RdfDisplay};
 
 #[derive(Serialize, Deserialize)]
 #[ld(prefix("ex" = "http://example.org/"))]

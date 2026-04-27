@@ -1,17 +1,15 @@
-[workspace.package]
-authors = ["Spruce Systems, Inc."]
-license = "MIT/Apache-2.0"
-repository = "https://github.com/spruceid/linked-data-rs"
-edition = "2021"
-rust-version = "1.71.1"
-version = "0.1.2"
-
 [workspace]
 members = ["ld-core", "ld-core-derive"]
-resolver = "2"
+resolver = "3"
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+rust-version = "1.85.0"
+authors = ["Spruce Systems, Inc.", "Matej Škvarč <matej.skvarc@senlab.io>"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/mskvarc/ld-core/"
 
 [workspace.dependencies]
-ld-core-derive = { version = "0.1.0", path = "ld-core-derive" }
-iref = "3.0"
-static-iref = "3.0"
-thiserror = "1.0.47"
+ld-core-derive = { version = "0.2.0", path = "ld-core-derive" }

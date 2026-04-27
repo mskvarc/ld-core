@@ -1,10 +1,9 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
-use super::{generate_fields, Error};
+use super::{Error, generate_fields};
 use crate::generate::{
-	extend_generics, read_variant_attributes, InterpretationBounds, TypeAttributes,
-	VocabularyBounds,
+	InterpretationBounds, TypeAttributes, extend_generics, read_variant_attributes,
 };
 
 pub fn generate(
@@ -14,7 +13,7 @@ pub fn generate(
 	e: syn::DataEnum,
 ) -> Result<TokenStream, Error> {
 	let mut interpretation_bounds = InterpretationBounds {
-		reverse_iri: true,
+		reverse: true,
 		..Default::default()
 	};
 
@@ -27,40 +26,41 @@ pub fn generate(
 
 		let deserialize_variant = match v_attrs.iri {
 			Some(compact_iri) => {
-				let iri = compact_iri.expand(&attrs.prefixes)?.into_string();
-				interpretation_bounds.iri_mut = true;
+				let iri = compact_iri.expand(&attrs.prefixes)?.to_string();
 
 				match variant_shape(&v.fields) {
 					VariantShape::Simple(ty) => {
 						bounds.push(
 							syn::parse2(
-								quote!(#ty: ::ld_core::LinkedDataDeserializePredicateObjects<I_, V_>),
+								quote!(#ty: ::ld_core::LinkedDataDeserializePredicateObjects<I_>),
 							)
 							.unwrap(),
 						);
 
 						quote! {
-							match vocabulary_.get(unsafe { ::ld_core::iref::Iri::new_unchecked(#iri) }).and_then(|iri| interpretation_.iri_interpretation(&iri)) {
-								Some(predicate) => {
-									let context_ = context_.with_predicate(&predicate);
-									let result = ::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
-										vocabulary_,
-										interpretation_,
-										dataset_,
-										graph_,
-										::ld_core::rdf_types::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate),
-										context_
-									);
+							{
+								let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+								match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+									Some(predicate) => {
+										let context_ = context_.with_predicate(&predicate);
+										let result = ::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
+											interpretation_,
+											dataset_,
+											graph_,
+											::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate),
+											context_
+										);
 
-									match result {
-										Ok(value) => return Ok(Self::#v_ident(value)),
-										Err(e) => error = Some(e)
+										match result {
+											Ok(value) => return Ok(Self::#v_ident(value)),
+											Err(e) => error = Some(e)
+										}
 									}
-								}
-								None => {
-									error = Some(::ld_core::FromLinkedDataError::MissingRequiredValue(
-										context_.into_iris(vocabulary_, interpretation_)
-									))
+									None => {
+										error = Some(::ld_core::FromLinkedDataError::MissingRequiredValue(
+											context_.into_iris(interpretation_)
+										))
+									}
 								}
 							}
 						}
@@ -74,50 +74,53 @@ pub fn generate(
 						let constructor = fields_de.constructor;
 
 						quote! {
-							match vocabulary_.get(unsafe { ::ld_core::iref::Iri::new_unchecked(#iri) }).and_then(|iri| interpretation_.iri_interpretation(&iri)) {
-								Some(predicate) => {
-									let mut objects = ::ld_core::rdf_types::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate);
+							{
+								let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+								match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+									Some(predicate) => {
+										let mut objects = ::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate);
 
-									let result = match objects.next() {
-										Some(resource_) => {
-											(|| {
-												#(#deserialize_fields)*
+										let result = match objects.next() {
+											Some(resource_) => {
+												(|| {
+													#(#deserialize_fields)*
 
-												if objects.next().is_some() {
-													Err(::ld_core::FromLinkedDataError::TooManyValues(
-														context_.into_iris(vocabulary_, interpretation_)
-													))
-												} else {
-													Ok(Self::#v_ident #constructor)
-												}
-											})()
+													if objects.next().is_some() {
+														Err(::ld_core::FromLinkedDataError::TooManyValues(
+															context_.into_iris(interpretation_)
+														))
+													} else {
+														Ok(Self::#v_ident #constructor)
+													}
+												})()
+											}
+											None => Err(::ld_core::FromLinkedDataError::MissingRequiredValue(
+												context_.into_iris(interpretation_)
+											))
+										};
+
+										match result {
+											Ok(value) => return Ok(value),
+											Err(e) => error = Some(e)
 										}
-										None => Err(::ld_core::FromLinkedDataError::MissingRequiredValue(
-											context_.into_iris(vocabulary_, interpretation_)
-										))
-									};
-
-									match result {
-										Ok(value) => return Ok(value),
-										Err(e) => error = Some(e)
 									}
-								}
-								None => {
-									error = Some(::ld_core::FromLinkedDataError::MissingRequiredValue(
-										context_.into_iris(vocabulary_, interpretation_)
-									))
+									None => {
+										error = Some(::ld_core::FromLinkedDataError::MissingRequiredValue(
+											context_.into_iris(interpretation_)
+										))
+									}
 								}
 							}
 						}
 					}
 					VariantShape::Unit => {
-						interpretation_bounds.reverse_iri = true;
+						interpretation_bounds.reverse = true;
 						quote! {
-							let expected_iri_ = unsafe { ::ld_core::iref::Iri::new_unchecked(#iri) };
-							for i in interpretation_.iris_of(resource_) {
-								let iri_ = vocabulary_.iri(&i).unwrap();
-								if iri_ == expected_iri_ {
-									return Ok(Self::#v_ident)
+							{
+								for i in ::ld_core::rdf_rs::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_) {
+									if i.as_str() == #iri {
+										return Ok(Self::#v_ident)
+									}
 								}
 							}
 						}
@@ -127,13 +130,12 @@ pub fn generate(
 			None => match variant_shape(&v.fields) {
 				VariantShape::Simple(ty) => {
 					bounds.push(
-						syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_, V_>))
+						syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_>))
 							.unwrap(),
 					);
 
 					quote! {
 						let result = ::ld_core::LinkedDataDeserializeSubject::deserialize_subject_in(
-							vocabulary_,
 							interpretation_,
 							dataset_,
 							graph_,
@@ -176,15 +178,13 @@ pub fn generate(
 		deserialize_variants.push(deserialize_variant)
 	}
 
-	let vocabulary_bounds = VocabularyBounds::default();
-	let ld_generics = extend_generics(&generics, vocabulary_bounds, interpretation_bounds, bounds);
+	let ld_generics = extend_generics(&generics, interpretation_bounds, bounds);
 	let (_, ty_generics, _) = generics.split_for_impl();
 	let (impl_generics, _, where_clause) = ld_generics.split_for_impl();
 
 	Ok(quote! {
-		impl #impl_generics ::ld_core::LinkedDataDeserializeSubject<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataDeserializeSubject<I_> for #ident #ty_generics #where_clause {
 			fn deserialize_subject_in<D_>(
-				vocabulary_: &V_,
 				interpretation_: &I_,
 				dataset_: &D_,
 				graph_: Option<&I_::Resource>,
@@ -192,7 +192,7 @@ pub fn generate(
 				outer_context_: ::ld_core::Context<I_>
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
-				D_: ::ld_core::rdf_types::dataset::PatternMatchingDataset<Resource = I_::Resource>
+				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let context_ = outer_context_.with_subject(resource_);
 				let mut error = None;
@@ -201,18 +201,15 @@ pub fn generate(
 
 				Err(error.unwrap_or_else(|| {
 					::ld_core::FromLinkedDataError::InvalidSubject {
-						context: outer_context_.into_iris(vocabulary_, interpretation_),
-						subject: interpretation_.iris_of(resource_).next().map(|i| {
-							vocabulary_.iri(i).unwrap().to_owned()
-						})
+						context: outer_context_.into_iris(interpretation_),
+						subject: ::ld_core::rdf_rs::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_).next().map(|i| i.into_owned())
 					}
 				}))
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedDataDeserializePredicateObjects<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataDeserializePredicateObjects<I_> for #ident #ty_generics #where_clause {
 			fn deserialize_objects_in<'de_, D_>(
-				vocabulary: &V_,
 				interpretation: &I_,
 				dataset: &D_,
 				graph: Option<&I_::Resource>,
@@ -221,14 +218,13 @@ pub fn generate(
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
 				I_::Resource: 'de_,
-				D_: ::ld_core::rdf_types::dataset::PatternMatchingDataset<Resource = I_::Resource>
+				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let mut objects = objects.into_iter();
 
 				match objects.next() {
 					Some(object) => {
-						let value = <Self as ::ld_core::LinkedDataDeserializeSubject<I_, V_>>::deserialize_subject_in(
-							vocabulary,
+						let value = <Self as ::ld_core::LinkedDataDeserializeSubject<I_>>::deserialize_subject_in(
 							interpretation,
 							dataset,
 							graph,
@@ -238,7 +234,7 @@ pub fn generate(
 
 						if objects.next().is_some() {
 							Err(::ld_core::FromLinkedDataError::TooManyValues(
-								context.into_iris(vocabulary, interpretation)
+								context.into_iris(interpretation)
 							))
 						} else {
 							Ok(value)
@@ -246,7 +242,7 @@ pub fn generate(
 					}
 					None => {
 						Err(::ld_core::FromLinkedDataError::MissingRequiredValue(
-							context.into_iris(vocabulary, interpretation)
+							context.into_iris(interpretation)
 						))
 					}
 				}

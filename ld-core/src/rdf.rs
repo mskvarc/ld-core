@@ -1,74 +1,108 @@
 use core::fmt;
 use std::borrow::Borrow;
 
-use educe::Educe;
-use iref::Iri;
-use rdf_types::{
-	vocabulary::{
-		BlankIdVocabulary, EmbedIntoVocabulary, IriVocabulary, IriVocabularyMut, LiteralVocabulary,
-		LiteralVocabularyMut,
-	},
-	Id, Interpretation, LiteralType, LiteralTypeRef, Quad, Term, Vocabulary,
+use iri_rs::{Iri, IriBuf, iri};
+use rdf_rs::{
+	BlankId, BlankIdBuf, Datatype, DatatypeRef, Id, Interpretation, InterpretationMut,
+	Literal, LiteralType, LiteralTypeRef, LocalTerm, LocalTermRef, Quad,
 };
 
-pub type RdfId<V> = Id<<V as IriVocabulary>::Iri, <V as BlankIdVocabulary>::BlankId>;
-pub type RdfTerm<V> = Term<RdfId<V>, RdfLiteral<V>>;
+pub type RdfId = Id;
+pub type RdfTerm = LocalTerm;
+pub type RdfTermRef<'a> = LocalTermRef<'a>;
 
-pub type RdfIdRef<'a, V> = Id<&'a <V as IriVocabulary>::Iri, &'a <V as BlankIdVocabulary>::BlankId>;
-pub type RdfTermRef<'a, V> = Term<RdfIdRef<'a, V>, RdfLiteralRef<'a, V>>;
+pub type RdfQuad = Quad<Id, IriBuf, LocalTerm, Id>;
 
-pub type RdfQuad<V = ()> = Quad<
-	RdfId<V>,
-	<V as IriVocabulary>::Iri,
-	Term<RdfId<V>, <V as LiteralVocabulary>::Literal>,
-	RdfId<V>,
+pub type InterpretedQuad<I> = Quad<
+	<I as Interpretation>::Resource,
+	<I as Interpretation>::Resource,
+	<I as Interpretation>::Resource,
+	<I as Interpretation>::Resource,
 >;
 
-pub type InterpretedQuad<I> = Quad<<I as Interpretation>::Resource>;
-
-#[derive(Educe)]
-#[educe(Debug(bound = "V::Iri: fmt::Debug, V::BlankId: fmt::Debug"))]
-pub enum CowRdfTerm<'a, V: Vocabulary> {
-	Borrowed(RdfTermRef<'a, V>),
-	Owned(RdfTerm<V>),
+#[derive(Debug, Clone)]
+pub enum CowRdfTerm<'a> {
+	Borrowed(BorrowedRdfTerm<'a>),
+	Owned(OwnedRdfTerm),
 }
 
-impl<'a, V: Vocabulary> CowRdfTerm<'a, V> {
-	pub fn from_str(vocabulary: &V, value: &'a str, ty: &'a V::Iri) -> Self {
-		use xsd_types::ValueRef;
+#[derive(Debug, Clone, Copy)]
+pub enum BorrowedRdfTerm<'a> {
+	Iri(Iri<&'a str>),
+	BlankId(&'a BlankId),
+	Literal(RdfLiteralRef<'a>),
+}
 
-		let ty_iri = vocabulary.iri(ty).unwrap();
+#[derive(Debug, Clone)]
+pub enum OwnedRdfTerm {
+	Iri(IriBuf),
+	BlankId(BlankIdBuf),
+	Literal(RdfLiteral),
+}
 
-		if ty_iri == RDF_JSON {
+impl OwnedRdfTerm {
+	pub fn into_id(self) -> Option<Id> {
+		match self {
+			Self::Iri(iri) => Some(Id::Iri(iri)),
+			Self::BlankId(b) => Some(Id::BlankId(b)),
+			Self::Literal(_) => None,
+		}
+	}
+}
+
+fn datatype_ref_or_unchecked(ty: Iri<&str>) -> DatatypeRef<'_> {
+	DatatypeRef::new(ty).unwrap_or_else(|_| unsafe { DatatypeRef::new_unchecked(ty) })
+}
+
+fn datatype_or_unchecked(ty: IriBuf) -> Datatype {
+	Datatype::new(ty.clone()).unwrap_or_else(|_| unsafe { Datatype::new_unchecked(ty) })
+}
+
+impl<'a> CowRdfTerm<'a> {
+	pub fn from_str(value: &'a str, ty: Iri<&'a str>) -> Self {
+		use xsd_rs::ValueRef;
+
+		if ty.as_str() == RDF_JSON.as_str() {
 			use json_syntax::Parse;
 			match json_syntax::Value::parse_str(value) {
-				Ok((json, _)) => CowRdfTerm::Owned(RdfTerm::Literal(RdfLiteral::Json(json))),
-				Err(_) => CowRdfTerm::Borrowed(RdfTermRef::Literal(RdfLiteralRef::Any(
+				Ok((json, _)) => CowRdfTerm::Owned(OwnedRdfTerm::Literal(RdfLiteral::Json(json))),
+				Err(_) => CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(RdfLiteralRef::Any(
 					value,
-					LiteralTypeRef::Any(ty),
+					LiteralTypeRef::Any(datatype_ref_or_unchecked(ty)),
 				))),
 			}
 		} else {
-			match xsd_types::Datatype::from_iri(ty_iri) {
-				Some(xsd_types::Datatype::String(xsd_types::StringDatatype::String)) => {
-					CowRdfTerm::Borrowed(RdfTermRef::Literal(RdfLiteralRef::Xsd(ValueRef::String(
-						value,
-					))))
+			match xsd_rs::Datatype::from_iri(&ty) {
+				Some(xsd_rs::Datatype::String(xsd_rs::StringDatatype::String)) => {
+					CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(RdfLiteralRef::Xsd(
+						ValueRef::String(value),
+					)))
 				}
 				Some(xsd_ty) => match xsd_ty.parse(value) {
 					Ok(xsd_value) => {
-						CowRdfTerm::Owned(RdfTerm::Literal(RdfLiteral::Xsd(xsd_value)))
+						CowRdfTerm::Owned(OwnedRdfTerm::Literal(RdfLiteral::Xsd(xsd_value)))
 					}
-					Err(_) => CowRdfTerm::Borrowed(RdfTermRef::Literal(RdfLiteralRef::Any(
+					Err(_) => CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(RdfLiteralRef::Any(
 						value,
-						LiteralTypeRef::Any(ty),
+						LiteralTypeRef::Any(datatype_ref_or_unchecked(ty)),
 					))),
 				},
-				None => CowRdfTerm::Borrowed(RdfTermRef::Literal(RdfLiteralRef::Any(
+				None => CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(RdfLiteralRef::Any(
 					value,
-					LiteralTypeRef::Any(ty),
+					LiteralTypeRef::Any(datatype_ref_or_unchecked(ty)),
 				))),
 			}
+		}
+	}
+
+	pub fn into_owned(self) -> OwnedRdfTerm {
+		match self {
+			Self::Borrowed(b) => match b {
+				BorrowedRdfTerm::Iri(i) => OwnedRdfTerm::Iri(i.into()),
+				BorrowedRdfTerm::BlankId(b) => OwnedRdfTerm::BlankId(b.to_owned()),
+				BorrowedRdfTerm::Literal(l) => OwnedRdfTerm::Literal(l.into_owned()),
+			},
+			Self::Owned(o) => o,
 		}
 	}
 }
@@ -96,126 +130,68 @@ impl<'a, T> Borrow<T> for CowRef<'a, T> {
 	}
 }
 
-impl<'a, V: Vocabulary> CowRdfTerm<'a, V> {
-	#[allow(clippy::type_complexity)]
-	pub fn into_term(
-		self,
-	) -> Term<Id<CowRef<'a, V::Iri>, CowRef<'a, V::BlankId>>, CowRdfLiteral<'a, V>> {
-		match self {
-			Self::Borrowed(Term::Id(Id::Iri(i))) => Term::Id(Id::Iri(CowRef::Borrowed(i))),
-			Self::Borrowed(Term::Id(Id::Blank(b))) => Term::Id(Id::Blank(CowRef::Borrowed(b))),
-			Self::Borrowed(Term::Literal(l)) => Term::Literal(CowRdfLiteral::Borrowed(l)),
-			Self::Owned(Term::Id(Id::Iri(i))) => Term::Id(Id::Iri(CowRef::Owned(i))),
-			Self::Owned(Term::Id(Id::Blank(b))) => Term::Id(Id::Blank(CowRef::Owned(b))),
-			Self::Owned(Term::Literal(l)) => Term::Literal(CowRdfLiteral::Owned(l)),
-		}
-	}
-
-	pub fn as_term_ref(&self) -> RdfTermRef<'_, V> {
-		match self {
-			Self::Borrowed(t) => *t,
-			Self::Owned(t) => match t {
-				Term::Id(Id::Iri(i)) => Term::Id(Id::Iri(i)),
-				Term::Id(Id::Blank(b)) => Term::Id(Id::Blank(b)),
-				Term::Literal(l) => Term::Literal(l.as_literal_ref()),
-			},
-		}
-	}
-
-	pub fn into_owned(self) -> RdfTerm<V>
-	where
-		V::Iri: Clone,
-		V::BlankId: Clone,
-	{
-		match self {
-			Self::Borrowed(t) => match t {
-				Term::Id(Id::Iri(i)) => Term::Id(Id::Iri(i.clone())),
-				Term::Id(Id::Blank(b)) => Term::Id(Id::Blank(b.clone())),
-				Term::Literal(l) => Term::Literal(l.into_owned()),
-			},
-			Self::Owned(t) => t,
-		}
-	}
-}
-
 pub trait RdfLiteralValue:
-	From<String> + From<xsd_types::Value> + From<json_syntax::Value>
+	From<String> + From<xsd_rs::Value> + From<json_syntax::Value>
 {
 }
 
-impl<T: From<String> + From<xsd_types::Value> + From<json_syntax::Value>> RdfLiteralValue for T {}
+impl<T: From<String> + From<xsd_rs::Value> + From<json_syntax::Value>> RdfLiteralValue for T {}
 
-pub trait AsRdfLiteral<V: IriVocabulary + LiteralVocabulary> {
-	fn as_rdf_literal<'a>(
-		&'a self,
-		vocabulary: &V,
-		ty: LiteralTypeRef<'a, V::Iri>,
-	) -> CowRdfLiteral<'a, V>;
+pub trait AsRdfLiteral {
+	fn as_rdf_literal<'a>(&'a self, ty: LiteralTypeRef<'a>) -> CowRdfLiteral<'a>;
 }
 
-impl<V: IriVocabulary + LiteralVocabulary> AsRdfLiteral<V> for str {
-	fn as_rdf_literal<'a>(
-		&'a self,
-		_vocabulary: &V,
-		ty: LiteralTypeRef<'a, V::Iri>,
-	) -> CowRdfLiteral<'a, V> {
+impl AsRdfLiteral for str {
+	fn as_rdf_literal<'a>(&'a self, ty: LiteralTypeRef<'a>) -> CowRdfLiteral<'a> {
 		CowRdfLiteral::Borrowed(RdfLiteralRef::Any(self, ty))
 	}
 }
 
-impl<V: IriVocabulary + LiteralVocabulary> AsRdfLiteral<V> for String {
-	fn as_rdf_literal<'a>(
-		&'a self,
-		vocabulary: &V,
-		ty: LiteralTypeRef<'a, V::Iri>,
-	) -> CowRdfLiteral<'a, V> {
-		self.as_str().as_rdf_literal(vocabulary, ty)
+impl AsRdfLiteral for String {
+	fn as_rdf_literal<'a>(&'a self, ty: LiteralTypeRef<'a>) -> CowRdfLiteral<'a> {
+		self.as_str().as_rdf_literal(ty)
 	}
 }
 
-pub trait RdfLiteralType<V: IriVocabulary>: From<rdf_types::LiteralType<V::Iri>> {}
-
-impl<V: IriVocabulary, T: From<rdf_types::LiteralType<V::Iri>>> RdfLiteralType<V> for T {}
-
-#[derive(Educe)]
-#[educe(Debug(bound = "V::Iri: fmt::Debug"))]
-pub enum RdfLiteral<V: IriVocabulary> {
-	Any(String, rdf_types::LiteralType<V::Iri>),
-	Xsd(xsd_types::Value),
+#[derive(Debug, Clone)]
+pub enum RdfLiteral {
+	Any(String, LiteralType),
+	Xsd(xsd_rs::Value),
 	Json(json_syntax::Value),
 }
 
-impl<V: IriVocabulary> RdfLiteral<V> {
-	pub fn into_lexical(self, vocabulary: &V) -> rdf_types::Literal {
+impl RdfLiteral {
+	pub fn into_lexical(self) -> Literal {
 		match self {
-			Self::Any(s, LiteralType::Any(ty)) => rdf_types::Literal::new(
-				s.to_owned(),
-				LiteralType::Any(vocabulary.owned_iri(ty).ok().unwrap()),
-			),
-			Self::Any(s, LiteralType::LangString(lang)) => {
-				rdf_types::Literal::new(s.to_owned(), LiteralType::LangString(lang))
-			}
+			Self::Any(s, ty) => Literal::new(s, ty),
 			Self::Xsd(value) => {
 				let ty = value.datatype().iri().to_owned();
-				rdf_types::Literal::new(value.to_string(), LiteralType::Any(ty))
+				Literal::new(value.to_string(), datatype_or_unchecked(ty.into()))
 			}
 			Self::Json(mut value) => {
 				value.canonicalize();
-				rdf_types::Literal::new(value.to_string(), LiteralType::Any(RDF_JSON.to_owned()))
+				Literal::new(
+					value.to_string(),
+					datatype_or_unchecked(RDF_JSON.into()),
+				)
 			}
 		}
 	}
 
-	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_, V> {
+	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_> {
 		match self {
 			Self::Any(value, ty) => RdfLiteralRef::Any(value, ty.as_ref()),
 			Self::Xsd(value) => RdfLiteralRef::Xsd(value.as_ref()),
 			Self::Json(value) => RdfLiteralRef::Json(value),
 		}
 	}
+
+	pub fn embed_into<I: InterpretationMut>(self, interpretation: &mut I) -> I::Resource {
+		interpretation.insert_literal(self.into_lexical().into_cow())
+	}
 }
 
-impl<V: IriVocabulary> fmt::Display for RdfLiteral<V> {
+impl fmt::Display for RdfLiteral {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
 			Self::Any(v, _) => v.fmt(f),
@@ -225,62 +201,35 @@ impl<V: IriVocabulary> fmt::Display for RdfLiteral<V> {
 	}
 }
 
-const RDF_JSON: &Iri = static_iref::iri!("http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON");
+pub const RDF_JSON: Iri<&'static str> = iri!("http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON");
 
-impl<V: Vocabulary + IriVocabularyMut + LiteralVocabularyMut> EmbedIntoVocabulary<V>
-	for RdfLiteral<V>
-{
-	type Embedded = V::Literal;
-
-	fn embed_into_vocabulary(self, vocabulary: &mut V) -> V::Literal {
-		match self {
-			Self::Any(s, ty) => vocabulary.insert_owned_literal(rdf_types::Literal::new(s, ty)),
-			Self::Xsd(v) => {
-				let ty = rdf_types::LiteralType::Any(vocabulary.insert(v.datatype().iri()));
-				vocabulary.insert_owned_literal(rdf_types::Literal::new(v.into(), ty))
-			}
-			Self::Json(v) => {
-				let ty = rdf_types::LiteralType::Any(vocabulary.insert(RDF_JSON));
-				vocabulary.insert_owned_literal(rdf_types::Literal::new(v.into(), ty))
-			}
-		}
-	}
-}
-
-#[derive(Educe)]
-#[educe(Debug(bound = "V::Iri: fmt::Debug"), Clone, Copy)]
-pub enum RdfLiteralRef<'a, V: IriVocabulary = ()> {
-	Any(&'a str, rdf_types::LiteralTypeRef<'a, V::Iri>),
-	Xsd(xsd_types::ValueRef<'a>),
+#[derive(Debug, Clone, Copy)]
+pub enum RdfLiteralRef<'a> {
+	Any(&'a str, LiteralTypeRef<'a>),
+	Xsd(xsd_rs::ValueRef<'a>),
 	Json(&'a json_syntax::Value),
 }
 
-impl<'a, V: IriVocabulary> RdfLiteralRef<'a, V> {
-	pub fn into_lexical(self, vocabulary: &V) -> rdf_types::Literal {
+impl<'a> RdfLiteralRef<'a> {
+	pub fn into_lexical(self) -> Literal {
 		match self {
-			Self::Any(s, LiteralTypeRef::Any(ty)) => rdf_types::Literal::new(
-				s.to_owned(),
-				LiteralType::Any(vocabulary.iri(ty).unwrap().to_owned()),
-			),
-			Self::Any(s, LiteralTypeRef::LangString(lang)) => {
-				rdf_types::Literal::new(s.to_owned(), LiteralType::LangString(lang.to_owned()))
-			}
+			Self::Any(s, ty) => Literal::new(s.to_owned(), ty.into_owned()),
 			Self::Xsd(value) => {
 				let ty = value.datatype().iri().to_owned();
-				rdf_types::Literal::new(value.to_string(), LiteralType::Any(ty))
+				Literal::new(value.to_string(), datatype_or_unchecked(ty.into()))
 			}
 			Self::Json(value) => {
 				let mut value = value.clone();
 				value.canonicalize();
-				rdf_types::Literal::new(value.to_string(), LiteralType::Any(RDF_JSON.to_owned()))
+				Literal::new(
+					value.to_string(),
+					datatype_or_unchecked(RDF_JSON.into()),
+				)
 			}
 		}
 	}
 
-	pub fn into_owned(self) -> RdfLiteral<V>
-	where
-		V::Iri: Clone,
-	{
+	pub fn into_owned(self) -> RdfLiteral {
 		match self {
 			Self::Any(value, ty) => RdfLiteral::Any(value.to_owned(), ty.into_owned()),
 			Self::Xsd(value) => RdfLiteral::Xsd(value.into_owned()),
@@ -289,23 +238,20 @@ impl<'a, V: IriVocabulary> RdfLiteralRef<'a, V> {
 	}
 }
 
-pub enum CowRdfLiteral<'a, V: IriVocabulary = ()> {
-	Borrowed(RdfLiteralRef<'a, V>),
-	Owned(RdfLiteral<V>),
+pub enum CowRdfLiteral<'a> {
+	Borrowed(RdfLiteralRef<'a>),
+	Owned(RdfLiteral),
 }
 
-impl<'a, V: IriVocabulary> CowRdfLiteral<'a, V> {
-	pub fn into_owned(self) -> RdfLiteral<V>
-	where
-		V::Iri: Clone,
-	{
+impl<'a> CowRdfLiteral<'a> {
+	pub fn into_owned(self) -> RdfLiteral {
 		match self {
 			Self::Borrowed(l) => l.into_owned(),
 			Self::Owned(l) => l,
 		}
 	}
 
-	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_, V> {
+	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_> {
 		match self {
 			Self::Borrowed(l) => *l,
 			Self::Owned(l) => l.as_literal_ref(),

@@ -1,4 +1,4 @@
-use rdf_types::{Interpretation, Vocabulary};
+use rdf_rs::Interpretation;
 
 use crate::{
 	LinkedData, LinkedDataGraph, LinkedDataPredicateObjects, LinkedDataResource, LinkedDataSubject,
@@ -15,55 +15,45 @@ impl<T> From<T> for Ref<T> {
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataResource<I, V>> LinkedDataResource<I, V>
-	for Ref<T>
-{
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		interpretation: &mut I,
-	) -> crate::ResourceInterpretation<'_, I, V> {
-		T::reference_interpretation(&self.0, vocabulary, interpretation)
+impl<I: Interpretation, T: LinkedDataResource<I>> LinkedDataResource<I> for Ref<T> {
+	fn interpretation(&self, interpretation: &mut I) -> crate::ResourceInterpretation<'_, I> {
+		T::reference_interpretation(&self.0, interpretation)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T> LinkedDataSubject<I, V> for Ref<T> {
+impl<I: Interpretation, T> LinkedDataSubject<I> for Ref<T> {
 	fn visit_subject<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
-		S: crate::SubjectVisitor<I, V>,
+		S: crate::SubjectVisitor<I>,
 	{
 		serializer.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataResource<I, V>> LinkedDataPredicateObjects<I, V>
-	for Ref<T>
-{
+impl<I: Interpretation, T: LinkedDataResource<I>> LinkedDataPredicateObjects<I> for Ref<T> {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: crate::PredicateObjectsVisitor<I, V>,
+		S: crate::PredicateObjectsVisitor<I>,
 	{
 		visitor.object(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataResource<I, V>> LinkedDataGraph<I, V>
-	for Ref<T>
-{
+impl<I: Interpretation, T: LinkedDataResource<I>> LinkedDataGraph<I> for Ref<T> {
 	fn visit_graph<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: crate::GraphVisitor<I, V>,
+		S: crate::GraphVisitor<I>,
 	{
 		visitor.subject(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataResource<I, V>> LinkedData<I, V> for Ref<T> {
+impl<I: Interpretation, T: LinkedDataResource<I>> LinkedData<I> for Ref<T> {
 	fn visit<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: crate::Visitor<I, V>,
+		S: crate::Visitor<I>,
 	{
 		visitor.default_graph(self)?;
 		visitor.end()

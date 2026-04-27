@@ -1,9 +1,9 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 
-use crate::generate::{extend_generics, InterpretationBounds, TypeAttributes, RDF_TYPE};
+use crate::generate::{InterpretationBounds, RDF_TYPE, TypeAttributes, extend_generics};
 
-use super::{variant_compound_fields, Error};
+use super::{Error, variant_compound_fields};
 
 pub fn generate(
 	attrs: &TypeAttributes,
@@ -32,32 +32,31 @@ pub fn generate(
 		.type_
 		.as_ref()
 		.map(|ty| {
-			let iri = ty.expand(&attrs.prefixes)?.into_string();
-			let rdf_type = RDF_TYPE.as_str();
+			let iri = ty.expand(&attrs.prefixes)?.to_string();
+			let rdf_type = RDF_TYPE;
 
 			Ok(quote! {
 				visitor.predicate(
-					::ld_core::iref::Iri::new(#rdf_type).unwrap(),
-					::ld_core::iref::Iri::new(#iri).unwrap()
+					&::ld_core::iri_rs::IriBuf::new(#rdf_type.to_owned()).unwrap(),
+					&::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap()
 				)?;
 			})
 		})
 		.transpose()?;
 
 	let visit = fields.visit.body;
-	let vocabulary_bounds = fields.visit.vocabulary_bounds;
 
 	let term = match fields.id_field {
 		Some((field_access, ty)) => {
 			bounds.push(
 				syn::parse2(quote! {
-					#ty: ::ld_core::LinkedDataResource<I_, V_>
+					#ty: ::ld_core::LinkedDataResource<I_>
 				})
 				.unwrap(),
 			);
 
 			quote! {
-				#field_access.interpretation(vocabulary, interpretation)
+				#field_access.interpretation(interpretation)
 			}
 		}
 		None => quote! {
@@ -65,60 +64,54 @@ pub fn generate(
 		},
 	};
 
-	let ld_generics = extend_generics(
-		&generics,
-		vocabulary_bounds,
-		InterpretationBounds::default(),
-		bounds,
-	);
+	let ld_generics = extend_generics(&generics, InterpretationBounds::default(), bounds);
 	let (_, ty_generics, _) = generics.split_for_impl();
 	let (impl_generics, _, where_clause) = ld_generics.split_for_impl();
 
 	Ok(quote! {
-		impl #impl_generics ::ld_core::LinkedDataResource<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataResource<I_> for #ident #ty_generics #where_clause {
 			fn interpretation(
 				&self,
-				vocabulary: &mut V_,
 				interpretation: &mut I_
-			) -> ld_core::ResourceInterpretation<I_, V_> {
+			) -> ::ld_core::ResourceInterpretation<'_, I_> {
 				#term
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedDataSubject<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataSubject<I_> for #ident #ty_generics #where_clause {
 			fn visit_subject<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::SubjectVisitor<I_, V_>
+				S_: ::ld_core::SubjectVisitor<I_>
 			{
 				#visit_type
 				#visit
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedDataPredicateObjects<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataPredicateObjects<I_> for #ident #ty_generics #where_clause {
 			fn visit_objects<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::PredicateObjectsVisitor<I_, V_>
+				S_: ::ld_core::PredicateObjectsVisitor<I_>
 			{
 				visitor.object(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedDataGraph<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataGraph<I_> for #ident #ty_generics #where_clause {
 			fn visit_graph<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::GraphVisitor<I_, V_>
+				S_: ::ld_core::GraphVisitor<I_>
 			{
 				visitor.subject(self)?;
 				visitor.end()
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedData<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedData<I_> for #ident #ty_generics #where_clause {
 			fn visit<S_>(&self, mut visitor: S_) -> Result<S_::Ok, S_::Error>
 			where
-				S_: ::ld_core::Visitor<I_, V_>
+				S_: ::ld_core::Visitor<I_>
 			{
 				visitor.default_graph(self)?;
 				visitor.end()

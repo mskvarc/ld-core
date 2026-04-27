@@ -15,8 +15,8 @@ feature) that can automatically implement those primitives for you.
 ## Example
 
 ```rust
-use iref::IriBuf;
-use static_iref::iri;
+use iri_rs::IriBuf;
+use iri_rs::iri;
 
 #[derive(ld_core::Serialize, ld_core::Deserialize)]
 #[ld(prefix("ex" = "http://example.org/"))]

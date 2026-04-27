@@ -12,10 +12,9 @@ version.workspace = true
 proc-macro = true
 
 [dependencies]
-syn = "2.0.29"
-proc-macro2 = "1.0.66"
-quote = "1.0.33"
+iri-rs = { version = "3.3.2", features = ["static"] }
+proc-macro2 = "1.0.106"
 proc-macro-error = "1.0.4"
-thiserror.workspace = true
-iref.workspace = true
-static-iref.workspace = true
+quote = "1.0.45"
+syn = "2.0.117"
+thiserror = "2.0.18"

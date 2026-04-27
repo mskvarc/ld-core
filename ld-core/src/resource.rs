@@ -1,18 +1,17 @@
 use educe::Educe;
-use iref::{Iri, IriBuf};
-use rdf_types::{
-	interpretation::ReverseTermInterpretation,
-	vocabulary::{BlankIdVocabularyMut, IriVocabularyMut},
-	BlankId, BlankIdBuf, Id, Interpretation, Term, Vocabulary,
+use iri_rs::IriBuf;
+use rdf_rs::{
+	interpretation::{ReverseInterpretation, ReverseLocalInterpretation},
+	BlankId, BlankIdBuf, Id, Interpretation, Literal, LocalTerm, Term,
 };
 use std::fmt;
 
-use crate::{AsRdfLiteral, CowRdfTerm};
+use crate::{BorrowedRdfTerm, CowRdfTerm, OwnedRdfTerm};
 
 /// Resource interpretation.
 #[derive(Educe)]
-#[educe(Debug(bound = "I::Resource: fmt::Debug, V::Iri: fmt::Debug, V::BlankId: fmt::Debug"))]
-pub enum ResourceInterpretation<'a, I: Interpretation, V: Vocabulary> {
+#[educe(Debug(bound = "I::Resource: fmt::Debug"))]
+pub enum ResourceInterpretation<'a, I: Interpretation> {
 	/// Interpreted resource.
 	Interpreted(&'a I::Resource),
 
@@ -20,10 +19,10 @@ pub enum ResourceInterpretation<'a, I: Interpretation, V: Vocabulary> {
 	///
 	/// It can be used to give an actual interpretation to the resource, bound
 	/// to its lexical representation.
-	Uninterpreted(Option<CowRdfTerm<'a, V>>),
+	Uninterpreted(Option<CowRdfTerm<'a>>),
 }
 
-impl<'a, I: Interpretation, V: Vocabulary> ResourceInterpretation<'a, I, V> {
+impl<'a, I: Interpretation> ResourceInterpretation<'a, I> {
 	pub fn as_interpreted(&self) -> Option<&'a I::Resource> {
 		match self {
 			Self::Interpreted(i) => Some(i),
@@ -31,7 +30,7 @@ impl<'a, I: Interpretation, V: Vocabulary> ResourceInterpretation<'a, I, V> {
 		}
 	}
 
-	pub fn as_uninterpreted(&self) -> Option<&CowRdfTerm<'a, V>> {
+	pub fn as_uninterpreted(&self) -> Option<&CowRdfTerm<'a>> {
 		match self {
 			Self::Uninterpreted(t) => t.as_ref(),
 			_ => None,
@@ -40,30 +39,26 @@ impl<'a, I: Interpretation, V: Vocabulary> ResourceInterpretation<'a, I, V> {
 
 	pub fn into_lexical_representation(
 		self,
-		vocabulary: &'a V,
 		interpretation: &'a I,
-	) -> Option<CowRdfTerm<'a, V>>
+	) -> Option<CowRdfTerm<'a>>
 	where
-		I: ReverseTermInterpretation<Iri = V::Iri, BlankId = V::BlankId, Literal = V::Literal>,
+		I: ReverseInterpretation + ReverseLocalInterpretation,
 	{
 		match self {
 			Self::Interpreted(r) => {
 				if let Some(i) = interpretation.iris_of(r).next() {
-					return Some(CowRdfTerm::Borrowed(Term::Id(Id::Iri(i))));
+					return Some(CowRdfTerm::Owned(OwnedRdfTerm::Iri(i.into_owned())));
 				}
 
 				if let Some(l) = interpretation.literals_of(r).next() {
-					let l = vocabulary.literal(l).unwrap();
-					let term = match l.value.as_rdf_literal(vocabulary, l.type_) {
-						crate::CowRdfLiteral::Borrowed(l) => CowRdfTerm::Borrowed(Term::Literal(l)),
-						crate::CowRdfLiteral::Owned(l) => CowRdfTerm::Owned(Term::Literal(l)),
-					};
-
-					return Some(term);
+					return Some(CowRdfTerm::Owned(OwnedRdfTerm::Literal(
+						crate::RdfLiteralRef::Any(&l.value.clone(), l.type_.as_ref()).into_owned(),
+					)
+					.into_self_owned()));
 				}
 
 				if let Some(b) = interpretation.blank_ids_of(r).next() {
-					return Some(CowRdfTerm::Borrowed(Term::Id(Id::Blank(b))));
+					return Some(CowRdfTerm::Owned(OwnedRdfTerm::BlankId(b.into_owned())));
 				}
 
 				None
@@ -73,74 +68,75 @@ impl<'a, I: Interpretation, V: Vocabulary> ResourceInterpretation<'a, I, V> {
 	}
 }
 
+impl OwnedRdfTerm {
+	fn into_self_owned(self) -> Self {
+		self
+	}
+}
+
 /// Type that can have an interpretation bound to the given lifetime.
-pub trait LinkedDataResourceRef<'a, I: Interpretation = (), V: Vocabulary = ()> {
+pub trait LinkedDataResourceRef<'a, I: Interpretation = ()> {
 	fn interpretation_ref(
 		&self,
-		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<'a, I, V>;
+	) -> ResourceInterpretation<'a, I>;
 }
 
 /// Type that can have an interpretation.
-pub trait LinkedDataResource<I: Interpretation = (), V: Vocabulary = ()> {
+pub trait LinkedDataResource<I: Interpretation = ()> {
 	fn interpretation(
 		&self,
-		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V>;
+	) -> ResourceInterpretation<'_, I>;
 
 	fn lexical_representation<'a>(
 		&'a self,
-		vocabulary: &'a mut V,
 		interpretation: &'a mut I,
-	) -> Option<CowRdfTerm<'a, V>>
+	) -> Option<CowRdfTerm<'a>>
 	where
-		I: ReverseTermInterpretation<Iri = V::Iri, BlankId = V::BlankId, Literal = V::Literal>,
+		I: ReverseInterpretation + ReverseLocalInterpretation,
 	{
-		self.interpretation(vocabulary, interpretation)
-			.into_lexical_representation(vocabulary, interpretation)
+		// Cannot use cleanly because of borrow checker; reconstruct.
+		match self.interpretation(interpretation) {
+			ResourceInterpretation::Interpreted(_) => {
+				// Re-call after reborrowing immutably.
+				self.interpretation(interpretation).into_lexical_representation(interpretation)
+			}
+			ResourceInterpretation::Uninterpreted(t) => t,
+		}
 	}
 
 	fn reference_interpretation(
 		&self,
-		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		self.interpretation(vocabulary, interpretation)
+	) -> ResourceInterpretation<'_, I> {
+		self.interpretation(interpretation)
 	}
 }
 
-impl<'a, I: Interpretation, V: Vocabulary, T: ?Sized + LinkedDataResource<I, V>>
-	LinkedDataResource<I, V> for &'a T
-{
+impl<'a, I: Interpretation, T: ?Sized + LinkedDataResource<I>> LinkedDataResource<I> for &'a T {
 	fn interpretation(
 		&self,
-		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		T::interpretation(self, vocabulary, interpretation)
+	) -> ResourceInterpretation<'_, I> {
+		T::interpretation(self, interpretation)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: ?Sized + LinkedDataResource<I, V>>
-	LinkedDataResource<I, V> for Box<T>
-{
+impl<I: Interpretation, T: ?Sized + LinkedDataResource<I>> LinkedDataResource<I> for Box<T> {
 	fn interpretation(
 		&self,
-		vocabulary: &mut V,
 		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		T::interpretation(self, vocabulary, interpretation)
+	) -> ResourceInterpretation<'_, I> {
+		T::interpretation(self, interpretation)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataResource<I, V> for () {
+impl<I: Interpretation> LinkedDataResource<I> for () {
 	fn interpretation(
 		&self,
-		_vocabulary: &mut V,
 		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
+	) -> ResourceInterpretation<'_, I> {
 		ResourceInterpretation::Uninterpreted(None)
 	}
 }
@@ -151,127 +147,132 @@ impl<I: Interpretation, V: Vocabulary> LinkedDataResource<I, V> for () {
 /// node identifier.
 pub struct Anonymous;
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataResource<I, V> for Anonymous {
+impl<I: Interpretation> LinkedDataResource<I> for Anonymous {
 	fn interpretation(
 		&self,
-		_vocabulary: &mut V,
 		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
+	) -> ResourceInterpretation<'_, I> {
 		ResourceInterpretation::Uninterpreted(None)
 	}
 }
 
-impl<V: Vocabulary + IriVocabularyMut, I: Interpretation> LinkedDataResource<I, V> for Iri {
+impl<I: Interpretation> LinkedDataResource<I> for IriBuf {
 	fn interpretation(
 		&self,
-		vocabulary: &mut V,
 		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Owned(Term::Id(Id::Iri(
-			vocabulary.insert(self),
-		)))))
-	}
-}
-
-impl<V: Vocabulary + IriVocabularyMut, I: Interpretation> LinkedDataResource<I, V> for IriBuf {
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Owned(Term::Id(Id::Iri(
-			vocabulary.insert(self),
-		)))))
-	}
-}
-
-impl<V: Vocabulary + BlankIdVocabularyMut, I: Interpretation> LinkedDataResource<I, V> for BlankId {
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Owned(Term::Id(Id::Blank(
-			vocabulary.insert_blank_id(self),
-		)))))
-	}
-}
-
-impl<V: Vocabulary + BlankIdVocabularyMut, I: Interpretation> LinkedDataResource<I, V>
-	for BlankIdBuf
-{
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Owned(Term::Id(Id::Blank(
-			vocabulary.insert_blank_id(self),
-		)))))
-	}
-}
-
-impl<
-		V: Vocabulary,
-		I: Interpretation,
-		T: LinkedDataResource<I, V>,
-		B: LinkedDataResource<I, V>,
-	> LinkedDataResource<I, V> for Id<T, B>
-{
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		match self {
-			Self::Iri(i) => i.reference_interpretation(vocabulary, interpretation),
-			Self::Blank(b) => b.reference_interpretation(vocabulary, interpretation),
-		}
-	}
-}
-
-impl<
-		V: Vocabulary,
-		I: Interpretation,
-		T: LinkedDataResource<I, V>,
-		B: LinkedDataResource<I, V>,
-		L: LinkedDataResource<I, V>,
-	> LinkedDataResource<I, V> for Term<Id<T, B>, L>
-{
-	fn interpretation(
-		&self,
-		vocabulary: &mut V,
-		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		match self {
-			Self::Id(id) => id.reference_interpretation(vocabulary, interpretation),
-			Self::Literal(l) => l.interpretation(vocabulary, interpretation),
-		}
-	}
-}
-
-impl<V: Vocabulary, I: Interpretation> LinkedDataResource<I, V> for rdf_types::Literal<V::Iri> {
-	fn interpretation(
-		&self,
-		_vocabulary: &mut V,
-		_interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
-		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(Term::Literal(
-			crate::RdfLiteralRef::Any(self.value.as_ref(), self.type_.as_ref()),
+	) -> ResourceInterpretation<'_, I> {
+		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(BorrowedRdfTerm::Iri(
+			self.as_ref(),
 		))))
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataResource<I, V>> LinkedDataResource<I, V>
-	for Option<T>
-{
+impl<'i, I: Interpretation> LinkedDataResource<I> for iri_rs::Iri<&'i str> {
 	fn interpretation(
 		&self,
-		vocabulary: &mut V,
-		interpretation: &mut I,
-	) -> ResourceInterpretation<'_, I, V> {
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(BorrowedRdfTerm::Iri(
+			*self,
+		))))
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for BlankId {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(BorrowedRdfTerm::BlankId(
+			self,
+		))))
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for BlankIdBuf {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(BorrowedRdfTerm::BlankId(
+			self.as_ref(),
+		))))
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for Id {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
 		match self {
-			Some(t) => t.interpretation(vocabulary, interpretation),
+			Self::Iri(i) => ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(
+				BorrowedRdfTerm::Iri(i.as_ref()),
+			))),
+			Self::BlankId(b) => ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(
+				BorrowedRdfTerm::BlankId(b),
+			))),
+		}
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for Term {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		match self {
+			Self::Iri(i) => ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(
+				BorrowedRdfTerm::Iri(i.as_ref()),
+			))),
+			Self::Literal(l) => ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(
+				BorrowedRdfTerm::Literal(crate::RdfLiteralRef::Any(&l.value, l.type_.as_ref())),
+			))),
+		}
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for LocalTerm {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		match self {
+			Self::BlankId(b) => ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(
+				BorrowedRdfTerm::BlankId(b),
+			))),
+			Self::Named(Term::Iri(i)) => ResourceInterpretation::Uninterpreted(Some(
+				CowRdfTerm::Borrowed(BorrowedRdfTerm::Iri(i.as_ref())),
+			)),
+			Self::Named(Term::Literal(l)) => ResourceInterpretation::Uninterpreted(Some(
+				CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(crate::RdfLiteralRef::Any(
+					&l.value,
+					l.type_.as_ref(),
+				))),
+			)),
+			Self::Triple(_) => ResourceInterpretation::Uninterpreted(None),
+		}
+	}
+}
+
+impl<I: Interpretation> LinkedDataResource<I> for Literal {
+	fn interpretation(
+		&self,
+		_interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(
+			crate::RdfLiteralRef::Any(self.value.as_str(), self.type_.as_ref()),
+		))))
+	}
+}
+
+impl<I: Interpretation, T: LinkedDataResource<I>> LinkedDataResource<I> for Option<T> {
+	fn interpretation(
+		&self,
+		interpretation: &mut I,
+	) -> ResourceInterpretation<'_, I> {
+		match self {
+			Some(t) => t.interpretation(interpretation),
 			None => ResourceInterpretation::Uninterpreted(None),
 		}
 	}

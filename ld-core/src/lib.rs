@@ -4,9 +4,8 @@
 //!
 //! # Example
 //!
-//! ```
-//! use iref::IriBuf;
-//! use static_iref::iri;
+//! ```ignore
+//! use iri_rs::{IriBuf, iri};
 //!
 //! #[derive(ld_core::Serialize, ld_core::Deserialize)]
 //! #[ld(prefix("ex" = "http://example.org/"))]
@@ -20,46 +19,23 @@
 //!   #[ld("ex:email")]
 //!   email: String
 //! }
-//!
-//! let value = Foo {
-//!   id: iri!("http://example.org/JohnSmith").to_owned(),
-//!   name: "John Smith".to_owned(),
-//!   email: "john.smith@example.org".to_owned()
-//! };
-//!
-//! let quads = ld_core::to_quads(rdf_types::generator::Blank::new(), &value)
-//!   .expect("RDF serialization failed");
-//!
-//! for quad in quads {
-//!   use rdf_types::RdfDisplay;
-//!   println!("{} .", quad.rdf_display())
-//! }
-//! ```
-//!
-//! This should print the following:
-//! ```text
-//! <http://example.org/JohnSmith> <http://example.org/name> "John Smith" .
-//! <http://example.org/JohnSmith> <http://example.org/email> "john.smith@example.org" .
 //! ```
 use educe::Educe;
-use iref::{Iri, IriBuf};
+use iri_rs::{Iri, IriBuf};
 #[cfg(feature = "derive")]
 pub use ld_core_derive::{Deserialize, Serialize};
-use rdf_types::{
-	dataset::{PatternMatchingDataset, TraversableDataset},
-	interpretation::ReverseIriInterpretation,
-	vocabulary::IriVocabulary,
-	Interpretation, Vocabulary,
+use rdf_rs::{
+	Interpretation, dataset::PatternMatchingDataset, interpretation::ReverseInterpretation,
 };
 
 #[doc(hidden)]
-pub use iref;
+pub use iri_rs;
 
 #[doc(hidden)]
-pub use rdf_types;
+pub use rdf_rs;
 
 #[doc(hidden)]
-pub use xsd_types;
+pub use xsd_rs;
 
 #[doc(hidden)]
 pub use json_syntax;
@@ -80,9 +56,9 @@ pub use anonymous::*;
 pub use graph::*;
 pub use predicate::*;
 pub use quads::{
-	to_interpreted_graph_quads, to_interpreted_quads, to_interpreted_subject_quads,
+	IntoQuadsError, to_interpreted_graph_quads, to_interpreted_quads, to_interpreted_subject_quads,
 	to_lexical_quads, to_lexical_quads_with, to_lexical_subject_quads,
-	to_lexical_subject_quads_with, to_quads, to_quads_with, IntoQuadsError,
+	to_lexical_subject_quads_with, to_quads, to_quads_with,
 };
 pub use rdf::*;
 pub use reference::*;
@@ -159,44 +135,42 @@ impl FromLinkedDataError {
 ///
 /// A Linked-Data type represents an RDF dataset which can be visited using the
 /// [`visit`](Self::visit) method.
-pub trait LinkedData<I: Interpretation = (), V: Vocabulary = ()> {
+pub trait LinkedData<I: Interpretation = ()> {
 	/// Visit the RDF dataset represented by this type.
 	fn visit<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: Visitor<I, V>;
+		S: Visitor<I>;
 }
 
-impl<'a, I: Interpretation, V: Vocabulary, T: ?Sized + LinkedData<I, V>> LinkedData<I, V>
-	for &'a T
-{
+impl<'a, I: Interpretation, T: ?Sized + LinkedData<I>> LinkedData<I> for &'a T {
 	fn visit<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: Visitor<I, V>,
+		S: Visitor<I>,
 	{
 		T::visit(self, visitor)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: ?Sized + LinkedData<I, V>> LinkedData<I, V> for Box<T> {
+impl<I: Interpretation, T: ?Sized + LinkedData<I>> LinkedData<I> for Box<T> {
 	fn visit<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: Visitor<I, V>,
+		S: Visitor<I>,
 	{
 		T::visit(self, visitor)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedData<I, V> for Iri {
+impl<I: Interpretation> LinkedData<I> for IriBuf {
 	fn visit<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: Visitor<I, V>,
+		S: Visitor<I>,
 	{
 		visitor.end()
 	}
 }
 
 /// RDF dataset visitor.
-pub trait Visitor<I: Interpretation = (), V: Vocabulary = ()> {
+pub trait Visitor<I: Interpretation = ()> {
 	/// Type of the value returned by the visitor when the dataset has been
 	/// entirely visited.
 	type Ok;
@@ -207,32 +181,32 @@ pub trait Visitor<I: Interpretation = (), V: Vocabulary = ()> {
 	/// Visits the default graph of the dataset.
 	fn default_graph<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: ?Sized + LinkedDataGraph<I, V>;
+		T: ?Sized + LinkedDataGraph<I>;
 
 	/// Visits a named graph of the dataset.
 	fn named_graph<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: ?Sized + LinkedDataResource<I, V> + LinkedDataGraph<I, V>;
+		T: ?Sized + LinkedDataResource<I> + LinkedDataGraph<I>;
 
 	/// Ends the dataset visit.
 	fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
 /// Any mutable reference to a visitor is itself a visitor.
-impl<'s, I: Interpretation, V: Vocabulary, S: Visitor<I, V>> Visitor<I, V> for &'s mut S {
+impl<'s, I: Interpretation, S: Visitor<I>> Visitor<I> for &'s mut S {
 	type Ok = ();
 	type Error = S::Error;
 
 	fn default_graph<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: ?Sized + LinkedDataGraph<I, V>,
+		T: ?Sized + LinkedDataGraph<I>,
 	{
 		S::default_graph(self, value)
 	}
 
 	fn named_graph<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: ?Sized + LinkedDataResource<I, V> + LinkedDataGraph<I, V>,
+		T: ?Sized + LinkedDataResource<I> + LinkedDataGraph<I>,
 	{
 		S::named_graph(self, value)
 	}
@@ -246,22 +220,18 @@ impl<'s, I: Interpretation, V: Vocabulary, S: Visitor<I, V>> Visitor<I, V> for &
 #[educe(Debug(bound = "I::Resource: core::fmt::Debug"), Clone, Copy)]
 pub enum ResourceOrIriRef<'a, I: Interpretation> {
 	Resource(&'a I::Resource),
-	Iri(&'a Iri),
+	Iri(Iri<&'a str>),
 	Anonymous,
 }
 
 impl<'a, I: Interpretation> ResourceOrIriRef<'a, I> {
-	pub fn into_iri<V>(self, vocabulary: &V, interpretation: &I) -> Option<IriBuf>
+	pub fn into_iri(self, interpretation: &I) -> Option<IriBuf>
 	where
-		V: IriVocabulary,
-		I: ReverseIriInterpretation<Iri = V::Iri>,
+		I: ReverseInterpretation,
 	{
 		match self {
-			Self::Resource(r) => interpretation
-				.iris_of(r)
-				.next()
-				.map(|i| vocabulary.iri(i).unwrap().to_owned()),
-			Self::Iri(i) => Some(i.to_owned()),
+			Self::Resource(r) => interpretation.iris_of(r).next().map(|i| i.into_owned()),
+			Self::Iri(i) => Some(i.into()),
 			Self::Anonymous => None,
 		}
 	}
@@ -297,7 +267,7 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		}
 	}
 
-	pub fn with_predicate_iri(self, predicate: &'a Iri) -> Self {
+	pub fn with_predicate_iri(self, predicate: Iri<&'a str>) -> Self {
 		match self {
 			Self::Predicate { subject } => Self::Object {
 				subject,
@@ -317,19 +287,18 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		}
 	}
 
-	pub fn into_iris<V>(self, vocabulary: &V, interpretation: &I) -> ContextIris
+	pub fn into_iris(self, interpretation: &I) -> ContextIris
 	where
-		V: IriVocabulary,
-		I: ReverseIriInterpretation<Iri = V::Iri>,
+		I: ReverseInterpretation,
 	{
 		match self {
 			Self::Subject => ContextIris::Subject,
 			Self::Predicate { subject } => ContextIris::Predicate {
-				subject: subject.into_iri(vocabulary, interpretation),
+				subject: subject.into_iri(interpretation),
 			},
 			Self::Object { subject, predicate } => ContextIris::Object {
-				subject: subject.into_iri(vocabulary, interpretation),
-				predicate: predicate.into_iri(vocabulary, interpretation),
+				subject: subject.into_iri(interpretation),
+				predicate: predicate.into_iri(interpretation),
 			},
 		}
 	}
@@ -353,19 +322,26 @@ impl<'a, I: Interpretation> Default for Context<'a, I> {
 	}
 }
 
-pub trait LinkedDataDeserialize<V: Vocabulary = (), I: Interpretation = ()>: Sized {
+pub trait LinkedDataDeserialize<I: Interpretation>: Sized
+where
+	I::Resource: rdf_rs::Resource,
+{
 	fn deserialize_dataset_in(
-		vocabulary: &V,
 		interpretation: &I,
-		dataset: &(impl TraversableDataset<Resource = I::Resource> + PatternMatchingDataset),
+		dataset: &(
+		     impl rdf_rs::dataset::TraversableDataset<Subject = I::Resource>
+		     + PatternMatchingDataset<Subject = I::Resource>
+		 ),
 		context: Context<I>,
 	) -> Result<Self, FromLinkedDataError>;
 
 	fn deserialize_dataset(
-		vocabulary: &V,
 		interpretation: &I,
-		dataset: &(impl TraversableDataset<Resource = I::Resource> + PatternMatchingDataset),
+		dataset: &(
+		     impl rdf_rs::dataset::TraversableDataset<Subject = I::Resource>
+		     + PatternMatchingDataset<Subject = I::Resource>
+		 ),
 	) -> Result<Self, FromLinkedDataError> {
-		Self::deserialize_dataset_in(vocabulary, interpretation, dataset, Context::default())
+		Self::deserialize_dataset_in(interpretation, dataset, Context::default())
 	}
 }

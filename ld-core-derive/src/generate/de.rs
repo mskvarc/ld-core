@@ -3,11 +3,9 @@ use std::collections::HashMap;
 use proc_macro2::TokenStream;
 
 use quote::{format_ident, quote};
-use syn::{spanned::Spanned, DeriveInput};
+use syn::{DeriveInput, spanned::Spanned};
 
-use super::{
-	read_field_attributes, read_type_attributes, Error, InterpretationBounds, TypeAttributes,
-};
+use super::{Error, InterpretationBounds, TypeAttributes, read_field_attributes, read_type_attributes};
 
 mod r#enum;
 mod r#struct;
@@ -115,37 +113,38 @@ fn generate_field(
 
 	match attrs.iri {
 		Some(compact_iri) => {
-			let iri = compact_iri.expand(prefixes)?.into_string();
-			interpretation_bounds.iri_mut = true;
+			let iri = compact_iri.expand(prefixes)?.to_string();
+			interpretation_bounds.reverse = true;
 
 			bounds.push(
-				syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializePredicateObjects<I_, V_>))
+				syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializePredicateObjects<I_>))
 					.unwrap(),
 			);
 
 			Ok(Some(quote! {
-				match vocabulary_.get(unsafe { ::ld_core::iref::Iri::new_unchecked(#iri) }).and_then(|iri| interpretation_.iri_interpretation(&iri)) {
-					Some(predicate_) => {
-						let context_ = context_.with_predicate(&predicate_);
-						::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
-							vocabulary_,
-							interpretation_,
-							dataset_,
-							graph_,
-							::ld_core::rdf_types::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
-							context_
-						)?
-					}
-					None => {
-						let context_ = context_.with_predicate_iri(unsafe {::ld_core::iref::Iri::new_unchecked(#iri) });
-						::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
-							vocabulary_,
-							interpretation_,
-							dataset_,
-							graph_,
-							[],
-							context_
-						)?
+				{
+					let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
+					match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+						Some(predicate_) => {
+							let context_ = context_.with_predicate(&predicate_);
+							::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
+								interpretation_,
+								dataset_,
+								graph_,
+								::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
+								context_
+							)?
+						}
+						None => {
+							let context_ = context_.with_predicate_iri(_iri_buf.as_ref());
+							::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
+								interpretation_,
+								dataset_,
+								graph_,
+								[],
+								context_
+							)?
+						}
 					}
 				}
 			}))
@@ -153,13 +152,12 @@ fn generate_field(
 		None => {
 			if attrs.is_id || attrs.flatten {
 				bounds.push(
-					syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_, V_>))
+					syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_>))
 						.unwrap(),
 				);
 
 				Ok(Some(quote! {
 					::ld_core::LinkedDataDeserializeSubject::deserialize_subject_in(
-						vocabulary_,
 						interpretation_,
 						dataset_,
 						graph_,

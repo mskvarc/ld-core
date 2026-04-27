@@ -1,11 +1,8 @@
-use iref::{Iri, IriBuf};
-use rdf_types::{
+use iri_rs::IriBuf;
+use rdf_rs::{
 	dataset::PatternMatchingDataset,
-	interpretation::{
-		ReverseBlankIdInterpretation, ReverseIdInterpretation, ReverseIriInterpretation,
-	},
-	vocabulary::{BlankIdVocabularyMut, IriVocabularyMut},
-	BlankId, BlankIdBuf, Id, Interpretation, Vocabulary,
+	interpretation::{ReverseInterpretation, ReverseLocalInterpretation},
+	BlankId, BlankIdBuf, Id, Interpretation,
 };
 
 use crate::{
@@ -14,172 +11,151 @@ use crate::{
 };
 
 /// Type representing the objects of an RDF subject's predicate binding.
-pub trait LinkedDataPredicateObjects<I: Interpretation = (), V: Vocabulary = ()> {
+pub trait LinkedDataPredicateObjects<I: Interpretation = ()> {
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>;
+		S: PredicateObjectsVisitor<I>;
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataPredicateObjects<I, V> for () {
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for () {
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		visitor.end()
 	}
 }
 
-impl<'a, I: Interpretation, V: Vocabulary, T: ?Sized + LinkedDataPredicateObjects<I, V>>
-	LinkedDataPredicateObjects<I, V> for &'a T
+impl<'a, I: Interpretation, T: ?Sized + LinkedDataPredicateObjects<I>>
+	LinkedDataPredicateObjects<I> for &'a T
 {
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		T::visit_objects(self, visitor)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: ?Sized + LinkedDataPredicateObjects<I, V>>
-	LinkedDataPredicateObjects<I, V> for Box<T>
+impl<I: Interpretation, T: ?Sized + LinkedDataPredicateObjects<I>> LinkedDataPredicateObjects<I>
+	for Box<T>
 {
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		T::visit_objects(self, visitor)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataSubject<I, V> + LinkedDataResource<I, V>>
-	LinkedDataPredicateObjects<I, V> for Option<T>
+impl<I: Interpretation, T: LinkedDataSubject<I> + LinkedDataResource<I>>
+	LinkedDataPredicateObjects<I> for Option<T>
 {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		if let Some(t) = self {
 			visitor.object(t)?;
 		}
-
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataSubject<I, V> + LinkedDataResource<I, V>>
-	LinkedDataPredicateObjects<I, V> for [T]
+impl<I: Interpretation, T: LinkedDataSubject<I> + LinkedDataResource<I>>
+	LinkedDataPredicateObjects<I> for [T]
 {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		for t in self {
 			visitor.object(t)?;
 		}
-
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataSubject<I, V> + LinkedDataResource<I, V>>
-	LinkedDataPredicateObjects<I, V> for Vec<T>
+impl<I: Interpretation, T: LinkedDataSubject<I> + LinkedDataResource<I>>
+	LinkedDataPredicateObjects<I> for Vec<T>
 {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		for t in self {
 			visitor.object(t)?;
 		}
-
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataPredicateObjects<I, V> for Iri
-where
-	V: IriVocabularyMut,
-{
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for IriBuf {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		visitor.object(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataPredicateObjects<I, V> for IriBuf
-where
-	V: IriVocabularyMut,
-{
+impl<'i, I: Interpretation> LinkedDataPredicateObjects<I> for iri_rs::Iri<&'i str> {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		visitor.object(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataPredicateObjects<I, V> for BlankId
-where
-	V: BlankIdVocabularyMut,
-{
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for BlankId {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		visitor.object(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataPredicateObjects<I, V> for BlankIdBuf
-where
-	V: BlankIdVocabularyMut,
-{
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for BlankIdBuf {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
 		visitor.object(self)?;
 		visitor.end()
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T, B> LinkedDataPredicateObjects<I, V> for Id<T, B>
-where
-	T: LinkedDataPredicateObjects<I, V>,
-	B: LinkedDataPredicateObjects<I, V>,
-{
-	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for Id {
+	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
-		S: PredicateObjectsVisitor<I, V>,
+		S: PredicateObjectsVisitor<I>,
 	{
-		match self {
-			Self::Iri(i) => i.visit_objects(visitor),
-			Self::Blank(b) => b.visit_objects(visitor),
-		}
+		visitor.object(self)?;
+		visitor.end()
 	}
 }
 
-pub trait PredicateObjectsVisitor<I: Interpretation, V: Vocabulary> {
+pub trait PredicateObjectsVisitor<I: Interpretation> {
 	type Ok;
 	type Error;
 
 	fn object<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
-		T: ?Sized + LinkedDataResource<I, V> + LinkedDataSubject<I, V>;
+		T: ?Sized + LinkedDataResource<I> + LinkedDataSubject<I>;
 
 	fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
-pub trait LinkedDataDeserializePredicateObjects<I: Interpretation = (), V: Vocabulary = ()>:
-	Sized
+pub trait LinkedDataDeserializePredicateObjects<I: Interpretation>: Sized
+where
+	I::Resource: rdf_rs::Resource,
 {
 	fn deserialize_objects_in<'a, D>(
-		vocabulary: &V,
 		interpretation: &I,
 		dataset: &D,
 		graph: Option<&I::Resource>,
@@ -188,10 +164,9 @@ pub trait LinkedDataDeserializePredicateObjects<I: Interpretation = (), V: Vocab
 	) -> Result<Self, FromLinkedDataError>
 	where
 		I::Resource: 'a,
-		D: PatternMatchingDataset<Resource = I::Resource>;
+		D: PatternMatchingDataset<Subject = I::Resource>;
 
 	fn deserialize_objects<'a, D>(
-		vocabulary: &V,
 		interpretation: &I,
 		dataset: &D,
 		graph: Option<&I::Resource>,
@@ -199,23 +174,15 @@ pub trait LinkedDataDeserializePredicateObjects<I: Interpretation = (), V: Vocab
 	) -> Result<Self, FromLinkedDataError>
 	where
 		I::Resource: 'a,
-		D: PatternMatchingDataset<Resource = I::Resource>,
+		D: PatternMatchingDataset<Subject = I::Resource>,
 	{
-		Self::deserialize_objects_in(
-			vocabulary,
-			interpretation,
-			dataset,
-			graph,
-			objects,
-			Context::default(),
-		)
+		Self::deserialize_objects_in(interpretation, dataset, graph, objects, Context::default())
 	}
 }
 
 macro_rules! deserialize_single_object {
 	() => {
 		fn deserialize_objects_in<'a, D>(
-			vocabulary: &V,
 			interpretation: &I,
 			dataset: &D,
 			graph: Option<&I::Resource>,
@@ -224,61 +191,58 @@ macro_rules! deserialize_single_object {
 		) -> Result<Self, FromLinkedDataError>
 		where
 			I::Resource: 'a,
-			D: PatternMatchingDataset<Resource = I::Resource>,
+			D: PatternMatchingDataset<Subject = I::Resource>,
 		{
 			use crate::LinkedDataDeserializeSubject;
 			let mut objects = objects.into_iter();
 			match objects.next() {
 				Some(object) => {
 					if objects.next().is_none() {
-						Self::deserialize_subject_in(
-							vocabulary,
-							interpretation,
-							dataset,
-							graph,
-							object,
-							context,
-						)
+						Self::deserialize_subject_in(interpretation, dataset, graph, object, context)
 					} else {
 						Err(FromLinkedDataError::TooManyValues(
-							context.into_iris(vocabulary, interpretation),
+							context.into_iris(interpretation),
 						))
 					}
 				}
 				None => Err(FromLinkedDataError::MissingRequiredValue(
-					context.into_iris(vocabulary, interpretation),
+					context.into_iris(interpretation),
 				)),
 			}
 		}
 	};
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataDeserializePredicateObjects<I, V> for IriBuf
+impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for IriBuf
 where
-	I: ReverseIriInterpretation<Iri = V::Iri>,
+	I: ReverseInterpretation,
+	I::Resource: rdf_rs::Resource,
 {
 	deserialize_single_object!();
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataDeserializePredicateObjects<I, V> for BlankIdBuf
+impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for BlankIdBuf
 where
-	I: ReverseIriInterpretation<Iri = V::Iri> + ReverseBlankIdInterpretation<BlankId = V::BlankId>,
+	I: ReverseInterpretation + ReverseLocalInterpretation,
+	I::Resource: rdf_rs::Resource,
 {
 	deserialize_single_object!();
 }
 
-impl<I: Interpretation, V: Vocabulary> LinkedDataDeserializePredicateObjects<I, V> for Id
+impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for Id
 where
-	I: ReverseIdInterpretation<Iri = V::Iri, BlankId = V::BlankId>,
+	I: ReverseInterpretation + ReverseLocalInterpretation,
+	I::Resource: rdf_rs::Resource,
 {
 	deserialize_single_object!();
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataDeserializePredicateObjects<I, V>>
-	LinkedDataDeserializePredicateObjects<I, V> for Box<T>
+impl<I: Interpretation, T: LinkedDataDeserializePredicateObjects<I>>
+	LinkedDataDeserializePredicateObjects<I> for Box<T>
+where
+	I::Resource: rdf_rs::Resource,
 {
 	fn deserialize_objects_in<'a, D>(
-		vocabulary: &V,
 		interpretation: &I,
 		dataset: &D,
 		graph: Option<&I::Resource>,
@@ -287,20 +251,19 @@ impl<I: Interpretation, V: Vocabulary, T: LinkedDataDeserializePredicateObjects<
 	) -> Result<Self, FromLinkedDataError>
 	where
 		I::Resource: 'a,
-		D: PatternMatchingDataset<Resource = I::Resource>,
+		D: PatternMatchingDataset<Subject = I::Resource>,
 	{
-		T::deserialize_objects_in(vocabulary, interpretation, dataset, graph, objects, context)
-			.map(Box::new)
+		T::deserialize_objects_in(interpretation, dataset, graph, objects, context).map(Box::new)
 	}
 }
 
-impl<I: Interpretation, V: Vocabulary, T: LinkedDataDeserializeSubject<I, V>>
-	LinkedDataDeserializePredicateObjects<I, V> for Option<T>
+impl<I: Interpretation, T: LinkedDataDeserializeSubject<I>> LinkedDataDeserializePredicateObjects<I>
+	for Option<T>
 where
-	I: ReverseIriInterpretation<Iri = V::Iri>,
+	I: ReverseInterpretation,
+	I::Resource: rdf_rs::Resource,
 {
 	fn deserialize_objects_in<'a, D>(
-		vocabulary: &V,
 		interpretation: &I,
 		dataset: &D,
 		graph: Option<&I::Resource>,
@@ -309,24 +272,17 @@ where
 	) -> Result<Self, FromLinkedDataError>
 	where
 		I::Resource: 'a,
-		D: PatternMatchingDataset<Resource = I::Resource>,
+		D: PatternMatchingDataset<Subject = I::Resource>,
 	{
 		let mut objects = objects.into_iter();
 		match objects.next() {
 			Some(object) => {
 				if objects.next().is_none() {
-					T::deserialize_subject_in(
-						vocabulary,
-						interpretation,
-						dataset,
-						graph,
-						object,
-						context,
-					)
-					.map(Some)
+					T::deserialize_subject_in(interpretation, dataset, graph, object, context)
+						.map(Some)
 				} else {
 					Err(FromLinkedDataError::TooManyValues(
-						context.into_iris(vocabulary, interpretation),
+						context.into_iris(interpretation),
 					))
 				}
 			}

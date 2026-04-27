@@ -1,14 +1,17 @@
-use iref::Iri;
+use iri_rs::Iri;
+use iri_rs::iri;
 use ld_core::{Deserialize, LinkedDataResource, Serialize};
-use static_iref::iri;
 
 #[derive(Serialize, Deserialize)]
 enum Foo<'a> {
-	Reference(#[ld(id)] &'a Iri),
+	Reference(#[ld(id)] Iri<&'a str>),
 }
 
 fn main() {
 	println!();
 	let a = Foo::Reference(iri!("http://example.org/foo"));
-	println!("{:?}", a.interpretation(&mut (), &mut ()));
+	let mut interpretation = ld_core::rdf_rs::generator::LocalGeneratorInterpretation::new(
+		ld_core::rdf_rs::generator::Blank::new(),
+	);
+	println!("{:?}", a.interpretation(&mut interpretation));
 }

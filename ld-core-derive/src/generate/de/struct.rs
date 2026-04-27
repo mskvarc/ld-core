@@ -1,7 +1,7 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
-use crate::generate::{extend_generics, TypeAttributes, VocabularyBounds};
+use crate::generate::{extend_generics, TypeAttributes};
 
 use super::{generate_fields, Error, FieldsDeserialization};
 
@@ -18,17 +18,15 @@ pub fn generate(
 		bounds,
 	} = generate_fields(attrs, s.fields)?;
 
-	interpretation_bounds.reverse_iri = true;
+	interpretation_bounds.reverse = true;
 
-	let vocabulary_bounds = VocabularyBounds::default();
-	let ld_generics = extend_generics(&generics, vocabulary_bounds, interpretation_bounds, bounds);
+	let ld_generics = extend_generics(&generics, interpretation_bounds, bounds);
 	let (_, ty_generics, _) = generics.split_for_impl();
 	let (impl_generics, _, where_clause) = ld_generics.split_for_impl();
 
 	Ok(quote! {
-		impl #impl_generics ::ld_core::LinkedDataDeserializeSubject<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataDeserializeSubject<I_> for #ident #ty_generics #where_clause {
 			fn deserialize_subject_in<D_>(
-				vocabulary_: &V_,
 				interpretation_: &I_,
 				dataset_: &D_,
 				graph_: Option<&I_::Resource>,
@@ -36,7 +34,7 @@ pub fn generate(
 				context_: ::ld_core::Context<I_>
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
-				D_: ::ld_core::rdf_types::dataset::PatternMatchingDataset<Resource = I_::Resource>
+				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let context_ = context_.with_subject(resource_);
 				#(#deserialize_fields)*
@@ -44,9 +42,8 @@ pub fn generate(
 			}
 		}
 
-		impl #impl_generics ::ld_core::LinkedDataDeserializePredicateObjects<I_, V_> for #ident #ty_generics #where_clause {
+		impl #impl_generics ::ld_core::LinkedDataDeserializePredicateObjects<I_> for #ident #ty_generics #where_clause {
 			fn deserialize_objects_in<'de_, D_>(
-				vocabulary: &V_,
 				interpretation: &I_,
 				dataset: &D_,
 				graph: Option<&I_::Resource>,
@@ -55,14 +52,13 @@ pub fn generate(
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
 				I_::Resource: 'de_,
-				D_: ::ld_core::rdf_types::dataset::PatternMatchingDataset<Resource = I_::Resource>
+				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let mut objects = objects.into_iter();
 
 				match objects.next() {
 					Some(object) => {
-						let value = <Self as ::ld_core::LinkedDataDeserializeSubject<I_, V_>>::deserialize_subject_in(
-							vocabulary,
+						let value = <Self as ::ld_core::LinkedDataDeserializeSubject<I_>>::deserialize_subject_in(
 							interpretation,
 							dataset,
 							graph,
@@ -72,7 +68,7 @@ pub fn generate(
 
 						if objects.next().is_some() {
 							Err(::ld_core::FromLinkedDataError::TooManyValues(
-								context.into_iris(vocabulary, interpretation)
+								context.into_iris(interpretation)
 							))
 						} else {
 							Ok(value)
@@ -80,7 +76,7 @@ pub fn generate(
 					}
 					None => {
 						Err(::ld_core::FromLinkedDataError::MissingRequiredValue(
-							context.into_iris(vocabulary, interpretation)
+							context.into_iris(interpretation)
 						))
 					}
 				}

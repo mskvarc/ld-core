@@ -1,24 +1,18 @@
-use rdf_types::{
-	interpretation::{ReverseIriInterpretation, ReverseLiteralInterpretation},
-	vocabulary::LiteralVocabulary,
-	Interpretation, Vocabulary, RDF_LANG_STRING,
-};
+use rdf_rs::{interpretation::ReverseInterpretation, Interpretation, RDF_LANG_STRING};
 
 use crate::{
-	Context, FromLinkedDataError, LinkedDataDeserializePredicateObjects,
-	LinkedDataDeserializeSubject,
+	Context, FromLinkedDataError, LinkedDataDeserializePredicateObjects, LinkedDataDeserializeSubject,
 };
 
 macro_rules! deserialize_datatype {
 	($($ty:ty : $iri:ident),*) => {
 		$(
-			impl<V: Vocabulary, I: Interpretation> LinkedDataDeserializeSubject<I, V> for $ty
+			impl<I: Interpretation> LinkedDataDeserializeSubject<I> for $ty
 			where
-				V: LiteralVocabulary,
-				I: ReverseIriInterpretation<Iri = V::Iri> + ReverseLiteralInterpretation<Literal = V::Literal>
+				I: ReverseInterpretation,
+				I::Resource: rdf_rs::Resource,
 			{
 				fn deserialize_subject_in<D>(
-					vocabulary: &V,
 					interpretation: &I,
 					_dataset: &D,
 					_graph: Option<&I::Resource>,
@@ -26,30 +20,27 @@ macro_rules! deserialize_datatype {
 					context: Context<I>
 				) -> Result<Self, FromLinkedDataError>
 				where
-					D: rdf_types::dataset::PatternMatchingDataset<Resource = I::Resource>
+					D: rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>
 				{
 					let mut literal_ty = None;
 					for l in interpretation.literals_of(resource) {
-						let l = vocabulary.literal(l).unwrap();
-						match l.type_ {
-							rdf_types::LiteralTypeRef::Any(ty_iri) => {
-								let ty_iri = vocabulary.iri(ty_iri).unwrap();
-								if ty_iri == xsd_types::$iri {
+						match &l.type_ {
+							rdf_rs::CowLiteralType::Any(ty) => {
+								let ty_iri = ty.as_iri();
+								if ty_iri.as_str() == xsd_rs::$iri.as_str() {
 									return match l.value.parse() {
 										Ok(value) => Ok(value),
 										Err(_) => Err(FromLinkedDataError::InvalidLiteral(
-											context.into_iris(
-												vocabulary,
-												interpretation
-											)
+											context.into_iris(interpretation)
 										))
 									}
 								}
 
-								literal_ty = Some(ty_iri)
+								literal_ty = Some(ty_iri.into())
 							}
-							rdf_types::LiteralTypeRef::LangString(_) => {
-								literal_ty = Some(RDF_LANG_STRING)
+							rdf_rs::CowLiteralType::LangString(_)
+							| rdf_rs::CowLiteralType::DirLangString { .. } => {
+								literal_ty = Some(RDF_LANG_STRING.into())
 							}
 						}
 					}
@@ -57,27 +48,26 @@ macro_rules! deserialize_datatype {
 					match literal_ty {
 						Some(ty) => {
 							Err(FromLinkedDataError::LiteralTypeMismatch {
-								context: context.into_iris(vocabulary, interpretation),
-								expected: Some(xsd_types::$iri.to_owned()),
-								found: ty.to_owned()
+								context: context.into_iris(interpretation),
+								expected: Some(xsd_rs::$iri.into()),
+								found: ty
 							})
 						}
 						None => {
 							Err(FromLinkedDataError::ExpectedLiteral(
-								context.into_iris(vocabulary, interpretation)
+								context.into_iris(interpretation)
 							))
 						}
 					}
 				}
 			}
 
-			impl<V: Vocabulary, I: Interpretation> LinkedDataDeserializePredicateObjects<I, V> for $ty
+			impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for $ty
 			where
-				V: LiteralVocabulary,
-				I: ReverseIriInterpretation<Iri = V::Iri> + ReverseLiteralInterpretation<Literal = V::Literal>
+				I: ReverseInterpretation,
+				I::Resource: rdf_rs::Resource,
 			{
 				fn deserialize_objects_in<'a, D>(
-					vocabulary: &V,
 					interpretation: &I,
 					dataset: &D,
 					graph: Option<&I::Resource>,
@@ -86,12 +76,12 @@ macro_rules! deserialize_datatype {
 				) -> Result<Self, FromLinkedDataError>
 				where
 					<I as Interpretation>::Resource: 'a,
-					D: rdf_types::dataset::PatternMatchingDataset<Resource = I::Resource>
+					D: rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>
 				{
 					let mut error = None;
 
 					for o in objects {
-						match Self::deserialize_subject_in(vocabulary, interpretation, dataset, graph, o, context) {
+						match Self::deserialize_subject_in(interpretation, dataset, graph, o, context) {
 							Ok(value) => return Ok(value),
 							Err(e) => error = Some(e)
 						}
@@ -99,7 +89,7 @@ macro_rules! deserialize_datatype {
 
 					Err(error.unwrap_or_else(|| {
 						FromLinkedDataError::MissingRequiredValue(
-							context.into_iris(vocabulary, interpretation)
+							context.into_iris(interpretation)
 						)
 					}))
 				}
@@ -118,5 +108,5 @@ deserialize_datatype!(
 	i32: XSD_INT,
 	i64: XSD_LONG,
 	String: XSD_STRING,
-	xsd_types::DateTime: XSD_DATE_TIME
+	xsd_rs::DateTime: XSD_DATE_TIME
 );

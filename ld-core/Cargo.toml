@@ -15,19 +15,18 @@ default = ["derive", "serde"]
 derive = ["ld-core-derive"]
 
 [dependencies]
-rdf-types = "0.22.1"
-xsd-types = "0.9.2"
-static-iref = "3.0"
-json-syntax = { version = "0.12.2", features = ["canonicalize"] }
-educe = "0.4.22"
+educe = "0.6.0"
 im = "15.1.0"
-iref.workspace = true
-thiserror.workspace = true
+iri-rs = { version = "3.3.2", features = ["static"] }
+json-syntax = { version = "0.12.5", features = ["canonicalize"] }
 ld-core-derive = { workspace = true, optional = true }
+rdf-rs = { git = "ssh://git@github.com/mskvarc/rdf-rs.git", version = "0.23.0" }
 serde = { version = "1.0", features = ["derive"], optional = true }
+xsd-rs = { git = "ssh://git@github.com/mskvarc/xsd-rs.git", version = "0.10.0" }
+thiserror = "2.0.18"
 
 [dev-dependencies]
-json-syntax = { version = "0.12.2", features = ["serde"] }
+json-syntax = { version = "0.12.5", features = ["serde"] }
 
 [[example]]
 name = "derive"
