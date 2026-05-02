@@ -63,8 +63,8 @@ impl<'a> CowRdfTerm<'a> {
 		use xsd_rs::ValueRef;
 
 		if ty.as_str() == RDF_JSON.as_str() {
-			use json_syntax::Parse;
-			match json_syntax::Value::parse_str(value) {
+			use jstrict::Parse;
+			match jstrict::Value::parse_str(value) {
 				Ok((json, _)) => CowRdfTerm::Owned(OwnedRdfTerm::Literal(RdfLiteral::Json(json))),
 				Err(_) => CowRdfTerm::Borrowed(BorrowedRdfTerm::Literal(RdfLiteralRef::Any(
 					value,
@@ -131,11 +131,11 @@ impl<'a, T> Borrow<T> for CowRef<'a, T> {
 }
 
 pub trait RdfLiteralValue:
-	From<String> + From<xsd_rs::Value> + From<json_syntax::Value>
+	From<String> + From<xsd_rs::Value> + From<jstrict::Value>
 {
 }
 
-impl<T: From<String> + From<xsd_rs::Value> + From<json_syntax::Value>> RdfLiteralValue for T {}
+impl<T: From<String> + From<xsd_rs::Value> + From<jstrict::Value>> RdfLiteralValue for T {}
 
 pub trait AsRdfLiteral {
 	fn as_rdf_literal<'a>(&'a self, ty: LiteralTypeRef<'a>) -> CowRdfLiteral<'a>;
@@ -157,7 +157,7 @@ impl AsRdfLiteral for String {
 pub enum RdfLiteral {
 	Any(String, LiteralType),
 	Xsd(xsd_rs::Value),
-	Json(json_syntax::Value),
+	Json(jstrict::Value),
 }
 
 impl RdfLiteral {
@@ -207,7 +207,7 @@ pub const RDF_JSON: Iri<&'static str> = iri!("http://www.w3.org/1999/02/22-rdf-s
 pub enum RdfLiteralRef<'a> {
 	Any(&'a str, LiteralTypeRef<'a>),
 	Xsd(xsd_rs::ValueRef<'a>),
-	Json(&'a json_syntax::Value),
+	Json(&'a jstrict::Value),
 }
 
 impl<'a> RdfLiteralRef<'a> {

@@ -38,7 +38,7 @@ pub use rdf_rs;
 pub use xsd_rs;
 
 #[doc(hidden)]
-pub use json_syntax;
+pub use jstrict;
 
 mod anonymous;
 mod datatypes;

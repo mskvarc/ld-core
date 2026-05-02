@@ -8,7 +8,7 @@ macro_rules! json_literal {
 			) -> $crate::ResourceInterpretation<'_, I> {
 				use $crate::{CowRdfTerm, OwnedRdfTerm, RdfLiteral, ResourceInterpretation};
 
-				let mut value = $crate::json_syntax::to_value(self).unwrap();
+				let mut value = $crate::jstrict::to_value(self).unwrap();
 				value.canonicalize();
 
 				ResourceInterpretation::Uninterpreted(Some(CowRdfTerm::Owned(
@@ -96,15 +96,15 @@ macro_rules! json_literal {
 						$crate::rdf_rs::CowLiteralType::Any(ref ty) => {
 							let ty_iri = ty.as_iri();
 							if ty_iri.as_str() == $crate::RDF_JSON.as_str() {
-								use $crate::json_syntax::Parse;
-								let (json, _) = $crate::json_syntax::Value::parse_str(&l.value)
+								use $crate::jstrict::Parse;
+								let (json, _) = $crate::jstrict::Value::parse_str(&l.value)
 									.map_err(|_| {
 										$crate::FromLinkedDataError::InvalidLiteral(
 											context.into_iris(interpretation),
 										)
 									})?;
 
-								return $crate::json_syntax::from_value(json).map_err(|_| {
+								return $crate::jstrict::from_value(json).map_err(|_| {
 									$crate::FromLinkedDataError::InvalidLiteral(
 										context.into_iris(interpretation),
 									)
