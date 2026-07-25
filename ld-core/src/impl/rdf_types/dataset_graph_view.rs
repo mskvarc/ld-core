@@ -1,6 +1,6 @@
-use rdf_rs::{
-	dataset::{DatasetGraphView, Graph, PatternMatchingDataset, PredicateTraversableDataset},
+use rdfx::{
 	Interpretation,
+	dataset::{DatasetGraphView, Graph, PatternMatchingDataset, PredicateTraversableDataset},
 };
 use std::hash::Hash;
 
@@ -11,8 +11,8 @@ use crate::{
 
 impl<'a, I: Interpretation, D> LinkedDataSubject<I> for DatasetGraphView<'a, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,
@@ -30,10 +30,10 @@ where
 	}
 }
 
-struct PredicateObjects<'d, 'v, D: rdf_rs::dataset::Dataset>
+struct PredicateObjects<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
@@ -44,8 +44,8 @@ where
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataPredicateObjects<I> for PredicateObjects<'d, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,
@@ -72,18 +72,18 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for Object<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
+	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
 		self.object.interpretation(interpretation)
 	}
 }
 
-struct Object<'d, 'v, D: rdf_rs::dataset::Dataset>
+struct Object<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
@@ -93,8 +93,8 @@ where
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataSubject<I> for Object<'d, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,
@@ -120,10 +120,10 @@ where
 	}
 }
 
-struct Subject<'d, 'v, D: rdf_rs::dataset::Dataset>
+struct Subject<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
@@ -134,8 +134,8 @@ where
 
 impl<'d, 'v, D> Subject<'d, 'v, D>
 where
-	D: rdf_rs::dataset::Dataset + PredicateTraversableDataset + PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D: rdfx::dataset::Dataset + PredicateTraversableDataset + PatternMatchingDataset,
+	D::Subject: rdfx::Resource,
 {
 	fn new(
 		dataset: &'d D,
@@ -153,10 +153,13 @@ where
 		}
 	}
 
-	fn visit<I: Interpretation<Resource = D::Subject>, S>(&self, visitor: &mut S) -> Result<(), S::Error>
+	fn visit<I: Interpretation<Resource = D::Subject>, S>(
+		&self,
+		visitor: &mut S,
+	) -> Result<(), S::Error>
 	where
 		S: SubjectVisitor<I>,
-		I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
+		I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
 	{
 		for (predicate, _) in self
 			.dataset
@@ -180,8 +183,8 @@ where
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataSubject<I> for Subject<'d, 'v, D>
 where
-	D::Subject: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	D::Subject: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,

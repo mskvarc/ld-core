@@ -1,19 +1,23 @@
 use educe::Educe;
 use iri_rs::IriBuf;
-use rdf_rs::{
+use rdfx::generator::LocalGeneratorInterpretation;
+use rdfx::{
+	Id, Interpretation, InterpretationMut, IsGraph, IsObject, IsPredicate, IsSubject,
+	LocalGenerator, LocalTerm, Quad, Resource, Term,
 	interpretation::{
 		GenerativeInterpretation, LocalInterpretationMut, ReverseInterpretation,
 		ReverseLocalInterpretation,
-	}, Id, Interpretation, InterpretationMut, IsGraph, IsObject, IsPredicate, IsSubject, LocalGenerator, LocalTerm, Quad, Resource, Term,
+	},
 };
-use rdf_rs::generator::LocalGeneratorInterpretation;
 
 use crate::{
-	CowRdfTerm, GraphVisitor, InterpretedQuad, LinkedData, LinkedDataGraph,
-	LinkedDataResource, LinkedDataSubject, OwnedRdfTerm, PredicateObjectsVisitor, RdfQuad,
-	ResourceInterpretation, SubjectVisitor, Visitor,
+	CowRdfTerm, GraphVisitor, InterpretedQuad, LinkedData, LinkedDataGraph, LinkedDataResource,
+	LinkedDataSubject, OwnedRdfTerm, PredicateObjectsVisitor, RdfQuad, ResourceInterpretation,
+	SubjectVisitor, Visitor,
 };
 
+/// Serializes `value` into quads whose components are resources of
+/// `interpretation`.
 pub fn to_interpreted_quads<I>(
 	interpretation: &mut I,
 	value: &impl LinkedData<I>,
@@ -29,6 +33,8 @@ where
 	})
 }
 
+/// Serializes `value` as a single subject in `graph`, returning its
+/// resource and the quads describing it.
 pub fn to_interpreted_subject_quads<I>(
 	interpretation: &mut I,
 	graph: Option<&I::Resource>,
@@ -54,6 +60,8 @@ where
 	Ok((subject, result))
 }
 
+/// Serializes `value` as the content of `graph`, in the interpretation
+/// domain.
 pub fn to_interpreted_graph_quads<I>(
 	interpretation: &mut I,
 	value: &(impl LinkedDataGraph<I> + LinkedDataResource<I>),
@@ -77,12 +85,18 @@ where
 	Ok((graph, result))
 }
 
+/// Serializes `value` into lexical quads, using the given interpretation to
+/// resolve resources into IRIs, blank ids and literals.
 pub fn to_lexical_quads_with<I>(
 	interpretation: &mut I,
 	value: &impl LinkedData<I>,
 ) -> Result<Vec<RdfQuad>, IntoQuadsError>
 where
-	I: Interpretation + InterpretationMut + ReverseInterpretation + ReverseLocalInterpretation + GenerativeInterpretation,
+	I: Interpretation
+		+ InterpretationMut
+		+ ReverseInterpretation
+		+ ReverseLocalInterpretation
+		+ GenerativeInterpretation,
 {
 	let mut domain = LexicalDomain;
 
@@ -93,13 +107,19 @@ where
 	})
 }
 
+/// Serializes `value` as a single subject in `graph`, returning its
+/// identifier and the lexical quads describing it.
 pub fn to_lexical_subject_quads_with<I>(
 	interpretation: &mut I,
 	graph: Option<&Id>,
 	value: &(impl LinkedDataSubject<I> + LinkedDataResource<I>),
 ) -> Result<(Id, Vec<RdfQuad>), IntoQuadsError>
 where
-	I: Interpretation + InterpretationMut + ReverseInterpretation + ReverseLocalInterpretation + GenerativeInterpretation,
+	I: Interpretation
+		+ InterpretationMut
+		+ ReverseInterpretation
+		+ ReverseLocalInterpretation
+		+ GenerativeInterpretation,
 	I::Resource: Clone,
 {
 	let mut result = Vec::new();
@@ -118,6 +138,8 @@ where
 	Ok((subject, result))
 }
 
+/// Serializes `value` into lexical quads, drawing blank node identifiers
+/// from `generator`.
 pub fn to_lexical_quads<G: LocalGenerator>(
 	generator: G,
 	value: &impl LinkedData<LocalGeneratorInterpretation<G>>,
@@ -126,16 +148,23 @@ pub fn to_lexical_quads<G: LocalGenerator>(
 	to_lexical_quads_with(&mut interpretation, value)
 }
 
+/// Serializes `value` as a single subject in `graph`, drawing blank node
+/// identifiers from `generator`.
 pub fn to_lexical_subject_quads<G: LocalGenerator>(
 	generator: G,
 	graph: Option<&Id>,
-	value: &(impl LinkedDataSubject<LocalGeneratorInterpretation<G>>
-	      + LinkedDataResource<LocalGeneratorInterpretation<G>>),
+	value: &(
+	     impl LinkedDataSubject<LocalGeneratorInterpretation<G>>
+	     + LinkedDataResource<LocalGeneratorInterpretation<G>>
+	 ),
 ) -> Result<(Id, Vec<RdfQuad>), IntoQuadsError> {
 	let mut interpretation = LocalGeneratorInterpretation::new(generator);
 	to_lexical_subject_quads_with(&mut interpretation, graph, value)
 }
 
+/// Serializes `value` into quads, using the given interpretation.
+///
+/// Alias of [`to_lexical_quads_with`].
 pub fn to_quads_with<I>(
 	interpretation: &mut I,
 	value: &impl LinkedData<I>,
@@ -150,6 +179,10 @@ where
 	to_lexical_quads_with(interpretation, value)
 }
 
+/// Serializes `value` into quads, drawing blank node identifiers from
+/// `generator`.
+///
+/// Alias of [`to_lexical_quads`].
 pub fn to_quads<G: LocalGenerator>(
 	generator: G,
 	value: &impl LinkedData<LocalGeneratorInterpretation<G>>,
@@ -158,17 +191,22 @@ pub fn to_quads<G: LocalGenerator>(
 }
 
 #[derive(Debug, thiserror::Error)]
+/// Error raised while serializing a value into quads.
 pub enum IntoQuadsError {
 	#[error("invalid graph label")]
+	/// A resource used as a graph label is neither an IRI nor a blank node.
 	Graph,
 
 	#[error("invalid subject")]
+	/// A resource used as a subject is neither an IRI nor a blank node.
 	Subject,
 
 	#[error("invalid predicate")]
+	/// A resource used as a predicate is not an IRI.
 	Predicate,
 
 	#[error("missing lexical representation")]
+	/// A resource has no lexical representation in the interpretation.
 	MissingLexicalRepresentation,
 }
 
@@ -205,10 +243,7 @@ trait Domain<I: Interpretation> {
 		value: ResourceInterpretation<I>,
 	) -> Result<Self::Subject, IntoQuadsError>;
 
-	fn object_as_subject(
-		&self,
-		object: &Self::Object,
-	) -> Result<Self::Subject, IntoQuadsError>;
+	fn object_as_subject(&self, object: &Self::Object) -> Result<Self::Subject, IntoQuadsError>;
 
 	fn subject_as_object<'a>(
 		&self,
@@ -307,13 +342,15 @@ where
 			ResourceInterpretation::Interpreted(r) => Ok(r.clone()),
 			ResourceInterpretation::Uninterpreted(u) => match u {
 				Some(t) => match t.into_owned() {
-					OwnedRdfTerm::Iri(i) => Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i))),
-					OwnedRdfTerm::BlankId(b) => Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b))),
+					OwnedRdfTerm::Iri(i) => {
+						Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i)))
+					}
+					OwnedRdfTerm::BlankId(b) => {
+						Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b)))
+					}
 					OwnedRdfTerm::Literal(_) => Err(IntoQuadsError::Subject),
 				},
-				None => {
-					Ok(interpretation.new_resource())
-				}
+				None => Ok(interpretation.new_resource()),
 			},
 		}
 	}
@@ -327,7 +364,9 @@ where
 			ResourceInterpretation::Interpreted(r) => Ok(r.clone()),
 			ResourceInterpretation::Uninterpreted(u) => match u {
 				Some(t) => match t.into_owned() {
-					OwnedRdfTerm::Iri(i) => Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i))),
+					OwnedRdfTerm::Iri(i) => {
+						Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i)))
+					}
 					_ => Err(IntoQuadsError::Predicate),
 				},
 				None => Err(IntoQuadsError::Predicate),
@@ -344,13 +383,15 @@ where
 			ResourceInterpretation::Interpreted(r) => Ok(r.clone()),
 			ResourceInterpretation::Uninterpreted(u) => match u {
 				Some(t) => match t.into_owned() {
-					OwnedRdfTerm::Iri(i) => Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i))),
-					OwnedRdfTerm::BlankId(b) => Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b))),
+					OwnedRdfTerm::Iri(i) => {
+						Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i)))
+					}
+					OwnedRdfTerm::BlankId(b) => {
+						Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b)))
+					}
 					OwnedRdfTerm::Literal(l) => Ok(l.embed_into(interpretation)),
 				},
-				None => {
-					Ok(interpretation.new_resource())
-				}
+				None => Ok(interpretation.new_resource()),
 			},
 		}
 	}
@@ -364,21 +405,20 @@ where
 			ResourceInterpretation::Interpreted(r) => Ok(r.clone()),
 			ResourceInterpretation::Uninterpreted(u) => match u {
 				Some(t) => match t.into_owned() {
-					OwnedRdfTerm::Iri(i) => Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i))),
-					OwnedRdfTerm::BlankId(b) => Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b))),
+					OwnedRdfTerm::Iri(i) => {
+						Ok(interpretation.insert_iri(std::borrow::Cow::Owned(i)))
+					}
+					OwnedRdfTerm::BlankId(b) => {
+						Ok(interpretation.insert_blank_id(std::borrow::Cow::Owned(b)))
+					}
 					OwnedRdfTerm::Literal(_) => Err(IntoQuadsError::Graph),
 				},
-				None => {
-					Ok(interpretation.new_resource())
-				}
+				None => Ok(interpretation.new_resource()),
 			},
 		}
 	}
 
-	fn object_as_subject(
-		&self,
-		object: &Self::Object,
-	) -> Result<Self::Subject, IntoQuadsError> {
+	fn object_as_subject(&self, object: &Self::Object) -> Result<Self::Subject, IntoQuadsError> {
 		Ok(object.clone())
 	}
 
@@ -419,7 +459,11 @@ fn lexical_term_into_local(t: CowRdfTerm<'_>) -> LocalTerm {
 
 impl<I> Domain<I> for LexicalDomain
 where
-	I: Interpretation + InterpretationMut + ReverseInterpretation + ReverseLocalInterpretation + GenerativeInterpretation,
+	I: Interpretation
+		+ InterpretationMut
+		+ ReverseInterpretation
+		+ ReverseLocalInterpretation
+		+ GenerativeInterpretation,
 {
 	type Subject = Id;
 	type Predicate = IriBuf;
@@ -452,12 +496,10 @@ where
 		value: ResourceInterpretation<I>,
 	) -> Result<Self::Predicate, IntoQuadsError> {
 		match value {
-			ResourceInterpretation::Interpreted(r) => {
-				match interpretation.iris_of(r).next() {
-					Some(iri) => Ok(iri.into_owned()),
-					None => Err(IntoQuadsError::Predicate),
-				}
-			}
+			ResourceInterpretation::Interpreted(r) => match interpretation.iris_of(r).next() {
+				Some(iri) => Ok(iri.into_owned()),
+				None => Err(IntoQuadsError::Predicate),
+			},
 			ResourceInterpretation::Uninterpreted(u) => match u {
 				Some(t) => cow_term_into_iri(t).ok_or(IntoQuadsError::Predicate),
 				None => Err(IntoQuadsError::Predicate),
@@ -499,10 +541,7 @@ where
 		}
 	}
 
-	fn object_as_subject(
-		&self,
-		object: &Self::Object,
-	) -> Result<Self::Subject, IntoQuadsError> {
+	fn object_as_subject(&self, object: &Self::Object) -> Result<Self::Subject, IntoQuadsError> {
 		match object {
 			LocalTerm::BlankId(b) => Ok(Id::BlankId(b.clone())),
 			LocalTerm::Named(Term::Iri(i)) => Ok(Id::Iri(i.clone())),

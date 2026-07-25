@@ -40,14 +40,14 @@ pub fn generate(
 						quote! {
 							{
 								let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
-								match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+								match ::ld_core::rdfx::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
 									Some(predicate) => {
 										let context_ = context_.with_predicate(&predicate);
 										let result = ::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
 											interpretation_,
 											dataset_,
 											graph_,
-											::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate),
+											::ld_core::rdfx::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate),
 											context_
 										);
 
@@ -76,9 +76,9 @@ pub fn generate(
 						quote! {
 							{
 								let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
-								match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+								match ::ld_core::rdfx::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
 									Some(predicate) => {
-										let mut objects = ::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate);
+										let mut objects = ::ld_core::rdfx::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate);
 
 										let result = match objects.next() {
 											Some(resource_) => {
@@ -117,7 +117,7 @@ pub fn generate(
 						interpretation_bounds.reverse = true;
 						quote! {
 							{
-								for i in ::ld_core::rdf_rs::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_) {
+								for i in ::ld_core::rdfx::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_) {
 									if i.as_str() == #iri {
 										return Ok(Self::#v_ident)
 									}
@@ -192,7 +192,7 @@ pub fn generate(
 				outer_context_: ::ld_core::Context<I_>
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
-				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
+				D_: ::ld_core::rdfx::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let context_ = outer_context_.with_subject(resource_);
 				let mut error = None;
@@ -202,7 +202,7 @@ pub fn generate(
 				Err(error.unwrap_or_else(|| {
 					::ld_core::FromLinkedDataError::InvalidSubject {
 						context: outer_context_.into_iris(interpretation_),
-						subject: ::ld_core::rdf_rs::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_).next().map(|i| i.into_owned())
+						subject: ::ld_core::rdfx::interpretation::ReverseInterpretation::iris_of(interpretation_, resource_).next().map(|i| i.into_owned())
 					}
 				}))
 			}
@@ -218,7 +218,7 @@ pub fn generate(
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
 				I_::Resource: 'de_,
-				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
+				D_: ::ld_core::rdfx::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let mut objects = objects.into_iter();
 

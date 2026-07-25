@@ -10,8 +10,8 @@ enum Foo<'a> {
 fn main() {
 	println!();
 	let a = Foo::Reference(iri!("http://example.org/foo"));
-	let mut interpretation = ld_core::rdf_rs::generator::LocalGeneratorInterpretation::new(
-		ld_core::rdf_rs::generator::Blank::new(),
+	let mut interpretation = ld_core::rdfx::generator::LocalGeneratorInterpretation::new(
+		ld_core::rdfx::generator::Blank::new(),
 	);
 	println!("{:?}", a.interpretation(&mut interpretation));
 }

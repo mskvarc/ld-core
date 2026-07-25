@@ -2,17 +2,22 @@ use core::fmt;
 use std::borrow::Borrow;
 
 use iri_rs::{Iri, IriBuf, iri};
-use rdf_rs::{
-	BlankId, BlankIdBuf, Datatype, DatatypeRef, Id, Interpretation, InterpretationMut,
-	Literal, LiteralType, LiteralTypeRef, LocalTerm, LocalTermRef, Quad,
+use rdfx::{
+	BlankId, BlankIdBuf, Datatype, DatatypeRef, Id, Interpretation, InterpretationMut, Literal,
+	LiteralType, LiteralTypeRef, LocalTerm, LocalTermRef, Quad,
 };
 
+/// Node identifier: an IRI or a blank node identifier.
 pub type RdfId = Id;
+/// Lexical RDF term.
 pub type RdfTerm = LocalTerm;
+/// Borrowed lexical RDF term.
 pub type RdfTermRef<'a> = LocalTermRef<'a>;
 
+/// Lexical RDF quad.
 pub type RdfQuad = Quad<Id, IriBuf, LocalTerm, Id>;
 
+/// RDF quad whose components are resources of the interpretation `I`.
 pub type InterpretedQuad<I> = Quad<
 	<I as Interpretation>::Resource,
 	<I as Interpretation>::Resource,
@@ -21,26 +26,38 @@ pub type InterpretedQuad<I> = Quad<
 >;
 
 #[derive(Debug, Clone)]
+/// RDF term that is either borrowed or owned.
 pub enum CowRdfTerm<'a> {
+	/// A borrowed term.
 	Borrowed(BorrowedRdfTerm<'a>),
+	/// An owned term.
 	Owned(OwnedRdfTerm),
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Borrowed RDF term.
 pub enum BorrowedRdfTerm<'a> {
+	/// An IRI.
 	Iri(Iri<&'a str>),
+	/// A blank node identifier.
 	BlankId(&'a BlankId),
+	/// A literal.
 	Literal(RdfLiteralRef<'a>),
 }
 
 #[derive(Debug, Clone)]
+/// Owned RDF term.
 pub enum OwnedRdfTerm {
+	/// An IRI.
 	Iri(IriBuf),
+	/// A blank node identifier.
 	BlankId(BlankIdBuf),
+	/// A literal.
 	Literal(RdfLiteral),
 }
 
 impl OwnedRdfTerm {
+	/// Converts this term into a node identifier, unless it is a literal.
 	pub fn into_id(self) -> Option<Id> {
 		match self {
 			Self::Iri(iri) => Some(Id::Iri(iri)),
@@ -59,6 +76,7 @@ fn datatype_or_unchecked(ty: IriBuf) -> Datatype {
 }
 
 impl<'a> CowRdfTerm<'a> {
+	/// Creates a borrowed literal term from a lexical value and its datatype.
 	pub fn from_str(value: &'a str, ty: Iri<&'a str>) -> Self {
 		use xsd_rs::ValueRef;
 
@@ -95,6 +113,7 @@ impl<'a> CowRdfTerm<'a> {
 		}
 	}
 
+	/// Clones this term into an owned one.
 	pub fn into_owned(self) -> OwnedRdfTerm {
 		match self {
 			Self::Borrowed(b) => match b {
@@ -107,8 +126,11 @@ impl<'a> CowRdfTerm<'a> {
 	}
 }
 
+/// Value that is either borrowed or owned, without requiring [`ToOwned`].
 pub enum CowRef<'a, T> {
+	/// A borrowed value.
 	Borrowed(&'a T),
+	/// An owned value.
 	Owned(T),
 }
 
@@ -130,14 +152,14 @@ impl<'a, T> Borrow<T> for CowRef<'a, T> {
 	}
 }
 
-pub trait RdfLiteralValue:
-	From<String> + From<xsd_rs::Value> + From<jstrict::Value>
-{
-}
+/// Value that can be stored as an RDF literal.
+pub trait RdfLiteralValue: From<String> + From<xsd_rs::Value> + From<jstrict::Value> {}
 
 impl<T: From<String> + From<xsd_rs::Value> + From<jstrict::Value>> RdfLiteralValue for T {}
 
+/// Type that can be borrowed as an RDF literal of a given datatype.
 pub trait AsRdfLiteral {
+	/// Borrows this value as an RDF literal of type `ty`.
 	fn as_rdf_literal<'a>(&'a self, ty: LiteralTypeRef<'a>) -> CowRdfLiteral<'a>;
 }
 
@@ -154,13 +176,18 @@ impl AsRdfLiteral for String {
 }
 
 #[derive(Debug, Clone)]
+/// Owned RDF literal, kept in its most specific known form.
 pub enum RdfLiteral {
+	/// Literal held as a lexical value and a datatype.
 	Any(String, LiteralType),
+	/// Literal held as a parsed XSD value.
 	Xsd(xsd_rs::Value),
+	/// Literal held as a parsed `rdf:JSON` value.
 	Json(jstrict::Value),
 }
 
 impl RdfLiteral {
+	/// Converts this literal into its lexical form.
 	pub fn into_lexical(self) -> Literal {
 		match self {
 			Self::Any(s, ty) => Literal::new(s, ty),
@@ -170,14 +197,12 @@ impl RdfLiteral {
 			}
 			Self::Json(mut value) => {
 				value.canonicalize();
-				Literal::new(
-					value.to_string(),
-					datatype_or_unchecked(RDF_JSON.into()),
-				)
+				Literal::new(value.to_string(), datatype_or_unchecked(RDF_JSON.into()))
 			}
 		}
 	}
 
+	/// Borrows this literal.
 	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_> {
 		match self {
 			Self::Any(value, ty) => RdfLiteralRef::Any(value, ty.as_ref()),
@@ -186,6 +211,7 @@ impl RdfLiteral {
 		}
 	}
 
+	/// Inserts this literal into `interpretation`, returning its resource.
 	pub fn embed_into<I: InterpretationMut>(self, interpretation: &mut I) -> I::Resource {
 		interpretation.insert_literal(self.into_lexical().into_cow())
 	}
@@ -201,16 +227,23 @@ impl fmt::Display for RdfLiteral {
 	}
 }
 
+/// The `rdf:JSON` datatype IRI,
+/// <http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON>.
 pub const RDF_JSON: Iri<&'static str> = iri!("http://www.w3.org/1999/02/22-rdf-syntax-ns#JSON");
 
 #[derive(Debug, Clone, Copy)]
+/// Borrowed RDF literal, kept in its most specific known form.
 pub enum RdfLiteralRef<'a> {
+	/// Literal held as a lexical value and a datatype.
 	Any(&'a str, LiteralTypeRef<'a>),
+	/// Literal held as a parsed XSD value.
 	Xsd(xsd_rs::ValueRef<'a>),
+	/// Literal held as a parsed `rdf:JSON` value.
 	Json(&'a jstrict::Value),
 }
 
 impl<'a> RdfLiteralRef<'a> {
+	/// Converts this literal into its lexical form.
 	pub fn into_lexical(self) -> Literal {
 		match self {
 			Self::Any(s, ty) => Literal::new(s.to_owned(), ty.into_owned()),
@@ -221,14 +254,12 @@ impl<'a> RdfLiteralRef<'a> {
 			Self::Json(value) => {
 				let mut value = value.clone();
 				value.canonicalize();
-				Literal::new(
-					value.to_string(),
-					datatype_or_unchecked(RDF_JSON.into()),
-				)
+				Literal::new(value.to_string(), datatype_or_unchecked(RDF_JSON.into()))
 			}
 		}
 	}
 
+	/// Clones this literal into an owned one.
 	pub fn into_owned(self) -> RdfLiteral {
 		match self {
 			Self::Any(value, ty) => RdfLiteral::Any(value.to_owned(), ty.into_owned()),
@@ -238,12 +269,16 @@ impl<'a> RdfLiteralRef<'a> {
 	}
 }
 
+/// RDF literal that is either borrowed or owned.
 pub enum CowRdfLiteral<'a> {
+	/// A borrowed literal.
 	Borrowed(RdfLiteralRef<'a>),
+	/// An owned literal.
 	Owned(RdfLiteral),
 }
 
 impl<'a> CowRdfLiteral<'a> {
+	/// Clones this literal into an owned one.
 	pub fn into_owned(self) -> RdfLiteral {
 		match self {
 			Self::Borrowed(l) => l.into_owned(),
@@ -251,6 +286,7 @@ impl<'a> CowRdfLiteral<'a> {
 		}
 	}
 
+	/// Borrows this literal.
 	pub fn as_literal_ref(&self) -> RdfLiteralRef<'_> {
 		match self {
 			Self::Borrowed(l) => *l,

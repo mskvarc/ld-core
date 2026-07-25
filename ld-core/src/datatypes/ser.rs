@@ -1,4 +1,4 @@
-use rdf_rs::Interpretation;
+use rdfx::Interpretation;
 
 use crate::{
 	BorrowedRdfTerm, CowRdfTerm, LinkedDataPredicateObjects, LinkedDataResource, LinkedDataSubject,

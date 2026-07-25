@@ -2,29 +2,56 @@
 //! Linked-Data types. It is shipped with derive macros (using the `derive`
 //! feature) that can automatically implement those primitives for you.
 //!
+//! A value is described as a set of RDF quads: [`LinkedDataSubject`] says
+//! which properties a subject carries, [`LinkedDataPredicateObjects`] which
+//! objects a predicate points at, and [`LinkedDataGraph`] which graph they
+//! belong to. The derive macros implement all of them from `#[ld(...)]`
+//! attributes.
+//!
 //! # Example
 //!
-//! ```ignore
-//! use iri_rs::{IriBuf, iri};
+//! ```
+//! use iri_rs::IriBuf;
+//! use ld_core::rdfx::{RdfDisplay, generator};
+//! use ld_core::{Deserialize, Serialize, to_quads};
 //!
-//! #[derive(ld_core::Serialize, ld_core::Deserialize)]
+//! #[derive(Serialize, Deserialize)]
 //! #[ld(prefix("ex" = "http://example.org/"))]
 //! struct Foo {
-//!   #[ld(id)]
-//!   id: IriBuf,
+//!     #[ld(id)]
+//!     id: IriBuf,
 //!
-//!   #[ld("ex:name")]
-//!   name: String,
+//!     #[ld("ex:name")]
+//!     name: String,
 //!
-//!   #[ld("ex:email")]
-//!   email: String
+//!     #[ld("ex:email")]
+//!     email: String,
 //! }
+//!
+//! let value = Foo {
+//!     id: IriBuf::new("http://example.org/JohnSmith".to_owned()).unwrap(),
+//!     name: "John Smith".to_owned(),
+//!     email: "john.smith@example.org".to_owned(),
+//! };
+//!
+//! let quads = to_quads(generator::Blank::new(), &value).unwrap();
+//! let output: Vec<String> = quads.iter().map(|q| format!("{} .", q.rdf_display())).collect();
+//!
+//! assert!(output.contains(
+//!     &r#"<http://example.org/JohnSmith> <http://example.org/name> "John Smith" ."#.to_owned()
+//! ));
 //! ```
+//!
+//! # Feature flags
+//!
+//! - `derive` (default) — the [`Serialize`] and [`Deserialize`] derive macros.
+//! - `serde` (default) — `serde` interop, including the [`json_literal!`]
+//!   macro that maps a `serde` type onto an `rdf:JSON` literal.
 use educe::Educe;
 use iri_rs::{Iri, IriBuf};
 #[cfg(feature = "derive")]
 pub use ld_core_derive::{Deserialize, Serialize};
-use rdf_rs::{
+use rdfx::{
 	Interpretation, dataset::PatternMatchingDataset, interpretation::ReverseInterpretation,
 };
 
@@ -32,7 +59,7 @@ use rdf_rs::{
 pub use iri_rs;
 
 #[doc(hidden)]
-pub use rdf_rs;
+pub use rdfx;
 
 #[doc(hidden)]
 pub use xsd_rs;
@@ -66,12 +93,14 @@ pub use resource::*;
 pub use subject::*;
 
 #[derive(Debug, thiserror::Error)]
+/// Error raised while deserializing a value from Linked Data.
 pub enum FromLinkedDataError {
 	/// Resource has no IRI representation.
 	#[error("expected IRI")]
 	ExpectedIri(ContextIris),
 
 	#[error("unsupported IRI `{found}`")]
+	/// Resource is identified by an IRI the type does not accept.
 	UnsupportedIri {
 		/// Error context.
 		context: ContextIris,
@@ -90,8 +119,11 @@ pub enum FromLinkedDataError {
 	/// Resource has literal representations, but none of the expected type.
 	#[error("literal type mismatch")]
 	LiteralTypeMismatch {
+		/// Error context.
 		context: ContextIris,
+		/// Expected literal type, if the type accepts only one.
 		expected: Option<IriBuf>,
+		/// Literal type actually found.
 		found: IriBuf,
 	},
 
@@ -111,12 +143,15 @@ pub enum FromLinkedDataError {
 	/// Generic error for invalid subjects.
 	#[error("invalid subject")]
 	InvalidSubject {
+		/// Error context.
 		context: ContextIris,
+		/// Subject IRI, if it has one.
 		subject: Option<IriBuf>,
 	},
 }
 
 impl FromLinkedDataError {
+	/// Returns the context in which this error was raised.
 	pub fn context(&self) -> &ContextIris {
 		match self {
 			Self::ExpectedIri(c) => c,
@@ -142,7 +177,7 @@ pub trait LinkedData<I: Interpretation = ()> {
 		S: Visitor<I>;
 }
 
-impl<'a, I: Interpretation, T: ?Sized + LinkedData<I>> LinkedData<I> for &'a T {
+impl<I: Interpretation, T: ?Sized + LinkedData<I>> LinkedData<I> for &T {
 	fn visit<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: Visitor<I>,
@@ -193,7 +228,7 @@ pub trait Visitor<I: Interpretation = ()> {
 }
 
 /// Any mutable reference to a visitor is itself a visitor.
-impl<'s, I: Interpretation, S: Visitor<I>> Visitor<I> for &'s mut S {
+impl<I: Interpretation, S: Visitor<I>> Visitor<I> for &mut S {
 	type Ok = ();
 	type Error = S::Error;
 
@@ -218,13 +253,18 @@ impl<'s, I: Interpretation, S: Visitor<I>> Visitor<I> for &'s mut S {
 
 #[derive(Educe)]
 #[educe(Debug(bound = "I::Resource: core::fmt::Debug"), Clone, Copy)]
+/// Reference to a resource, either interpreted or lexical.
 pub enum ResourceOrIriRef<'a, I: Interpretation> {
+	/// A resource of the interpretation.
 	Resource(&'a I::Resource),
+	/// An IRI, outside of any interpretation.
 	Iri(Iri<&'a str>),
+	/// An anonymous resource, with no identifier.
 	Anonymous,
 }
 
 impl<'a, I: Interpretation> ResourceOrIriRef<'a, I> {
+	/// Resolves this reference into an IRI, if it has one.
 	pub fn into_iri(self, interpretation: &I) -> Option<IriBuf>
 	where
 		I: ReverseInterpretation,
@@ -239,24 +279,35 @@ impl<'a, I: Interpretation> ResourceOrIriRef<'a, I> {
 
 #[derive(Educe)]
 #[educe(Debug(bound = "I::Resource: core::fmt::Debug"), Clone, Copy)]
+/// Position a value occupies while being visited, used to report errors.
+#[derive(Default)]
 pub enum Context<'a, I: Interpretation> {
+	/// The value is a subject.
+	#[default]
 	Subject,
+	/// The value is a predicate of the given subject.
 	Predicate {
+		/// Subject the predicate belongs to.
 		subject: ResourceOrIriRef<'a, I>,
 	},
+	/// The value is an object of the given subject and predicate.
 	Object {
+		/// Subject the object belongs to.
 		subject: ResourceOrIriRef<'a, I>,
+		/// Predicate the object belongs to.
 		predicate: ResourceOrIriRef<'a, I>,
 	},
 }
 
 impl<'a, I: Interpretation> Context<'a, I> {
+	/// Moves this context into the predicate position of `subject`.
 	pub fn with_subject(self, subject: &'a I::Resource) -> Self {
 		Self::Predicate {
 			subject: ResourceOrIriRef::Resource(subject),
 		}
 	}
 
+	/// Moves this context into the object position of `predicate`.
 	pub fn with_predicate(self, predicate: &'a I::Resource) -> Self {
 		match self {
 			Self::Predicate { subject } => Self::Object {
@@ -267,6 +318,7 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		}
 	}
 
+	/// Moves this context into the object position of the `predicate` IRI.
 	pub fn with_predicate_iri(self, predicate: Iri<&'a str>) -> Self {
 		match self {
 			Self::Predicate { subject } => Self::Object {
@@ -277,6 +329,7 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		}
 	}
 
+	/// Moves this context into the object position of an anonymous predicate.
 	pub fn with_anonymous_predicate(self) -> Self {
 		match self {
 			Self::Predicate { subject } => Self::Object {
@@ -287,6 +340,7 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		}
 	}
 
+	/// Resolves the resources of this context into IRIs.
 	pub fn into_iris(self, interpretation: &I) -> ContextIris
 	where
 		I: ReverseInterpretation,
@@ -305,40 +359,45 @@ impl<'a, I: Interpretation> Context<'a, I> {
 }
 
 #[derive(Debug, Clone)]
+/// Error context with its resources resolved into IRIs.
 pub enum ContextIris {
+	/// The value is a subject.
 	Subject,
+	/// The value is a predicate of the given subject.
 	Predicate {
+		/// Subject IRI, if it has one.
 		subject: Option<IriBuf>,
 	},
+	/// The value is an object of the given subject and predicate.
 	Object {
+		/// Subject IRI, if it has one.
 		subject: Option<IriBuf>,
+		/// Predicate IRI, if it has one.
 		predicate: Option<IriBuf>,
 	},
 }
 
-impl<'a, I: Interpretation> Default for Context<'a, I> {
-	fn default() -> Self {
-		Self::Subject
-	}
-}
-
+/// Type that can be deserialized from an RDF dataset.
 pub trait LinkedDataDeserialize<I: Interpretation>: Sized
 where
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
+	/// Deserializes a value from `dataset`, reporting errors against
+	/// `context`.
 	fn deserialize_dataset_in(
 		interpretation: &I,
 		dataset: &(
-		     impl rdf_rs::dataset::TraversableDataset<Subject = I::Resource>
+		     impl rdfx::dataset::TraversableDataset<Subject = I::Resource>
 		     + PatternMatchingDataset<Subject = I::Resource>
 		 ),
 		context: Context<I>,
 	) -> Result<Self, FromLinkedDataError>;
 
+	/// Deserializes a value from `dataset`.
 	fn deserialize_dataset(
 		interpretation: &I,
 		dataset: &(
-		     impl rdf_rs::dataset::TraversableDataset<Subject = I::Resource>
+		     impl rdfx::dataset::TraversableDataset<Subject = I::Resource>
 		     + PatternMatchingDataset<Subject = I::Resource>
 		 ),
 	) -> Result<Self, FromLinkedDataError> {

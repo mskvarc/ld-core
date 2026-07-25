@@ -1,7 +1,13 @@
+/// Implements the Linked-Data resource traits for a `serde` type, mapping it
+/// onto a canonical `rdf:JSON` literal.
+///
+/// The type must implement `serde::Serialize` and `serde::Deserialize`. The
+/// generated impls serialize the value to JSON, canonicalize it, and store it
+/// as a literal of type [`RDF_JSON`](crate::RDF_JSON).
 #[macro_export]
 macro_rules! json_literal {
 	($ty:ty) => {
-		impl<I: $crate::rdf_rs::Interpretation> $crate::LinkedDataResource<I> for $ty {
+		impl<I: $crate::rdfx::Interpretation> $crate::LinkedDataResource<I> for $ty {
 			fn interpretation(
 				&self,
 				_interpretation: &mut I,
@@ -17,7 +23,7 @@ macro_rules! json_literal {
 			}
 		}
 
-		impl<I: $crate::rdf_rs::Interpretation> $crate::LinkedDataPredicateObjects<I> for $ty {
+		impl<I: $crate::rdfx::Interpretation> $crate::LinkedDataPredicateObjects<I> for $ty {
 			fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 			where
 				S: $crate::PredicateObjectsVisitor<I>,
@@ -27,11 +33,11 @@ macro_rules! json_literal {
 			}
 		}
 
-		impl<I: $crate::rdf_rs::Interpretation> $crate::LinkedDataDeserializePredicateObjects<I>
+		impl<I: $crate::rdfx::Interpretation> $crate::LinkedDataDeserializePredicateObjects<I>
 			for $ty
 		where
-			I: $crate::rdf_rs::interpretation::ReverseInterpretation,
-			I::Resource: $crate::rdf_rs::Resource,
+			I: $crate::rdfx::interpretation::ReverseInterpretation,
+			I::Resource: $crate::rdfx::Resource,
 		{
 			fn deserialize_objects_in<'a, D>(
 				interpretation: &I,
@@ -42,15 +48,15 @@ macro_rules! json_literal {
 			) -> Result<Self, $crate::FromLinkedDataError>
 			where
 				I::Resource: 'a,
-				D: $crate::rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>,
+				D: $crate::rdfx::dataset::PatternMatchingDataset<Subject = I::Resource>,
 			{
 				let mut objects = objects.into_iter();
 				match objects.next() {
 					Some(object) => {
 						if objects.next().is_none() {
 							<Self as $crate::LinkedDataDeserializeSubject<I>>::deserialize_subject_in(
-								interpretation, dataset, graph, object, context,
-							)
+														interpretation, dataset, graph, object, context,
+													)
 						} else {
 							Err($crate::FromLinkedDataError::TooManyValues(
 								context.into_iris(interpretation),
@@ -64,7 +70,7 @@ macro_rules! json_literal {
 			}
 		}
 
-		impl<I: $crate::rdf_rs::Interpretation> $crate::LinkedDataSubject<I> for $ty {
+		impl<I: $crate::rdfx::Interpretation> $crate::LinkedDataSubject<I> for $ty {
 			fn visit_subject<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 			where
 				S: $crate::SubjectVisitor<I>,
@@ -73,10 +79,10 @@ macro_rules! json_literal {
 			}
 		}
 
-		impl<I: $crate::rdf_rs::Interpretation> $crate::LinkedDataDeserializeSubject<I> for $ty
+		impl<I: $crate::rdfx::Interpretation> $crate::LinkedDataDeserializeSubject<I> for $ty
 		where
-			I: $crate::rdf_rs::interpretation::ReverseInterpretation,
-			I::Resource: $crate::rdf_rs::Resource,
+			I: $crate::rdfx::interpretation::ReverseInterpretation,
+			I::Resource: $crate::rdfx::Resource,
 		{
 			fn deserialize_subject_in<D>(
 				interpretation: &I,
@@ -86,14 +92,15 @@ macro_rules! json_literal {
 				context: $crate::Context<I>,
 			) -> Result<Self, $crate::FromLinkedDataError>
 			where
-				D: $crate::rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>,
+				D: $crate::rdfx::dataset::PatternMatchingDataset<Subject = I::Resource>,
 			{
 				let mut literal_ty = None;
-				for l in $crate::rdf_rs::interpretation::ReverseInterpretation::literals_of(
-					interpretation, resource,
+				for l in $crate::rdfx::interpretation::ReverseInterpretation::literals_of(
+					interpretation,
+					resource,
 				) {
 					match l.type_ {
-						$crate::rdf_rs::CowLiteralType::Any(ref ty) => {
+						$crate::rdfx::CowLiteralType::Any(ref ty) => {
 							let ty_iri = ty.as_iri();
 							if ty_iri.as_str() == $crate::RDF_JSON.as_str() {
 								use $crate::jstrict::Parse;
@@ -113,11 +120,9 @@ macro_rules! json_literal {
 								literal_ty = Some(ty_iri.into())
 							}
 						}
-						$crate::rdf_rs::CowLiteralType::LangString(_)
-						| $crate::rdf_rs::CowLiteralType::DirLangString { .. } => {
-							literal_ty = Some(
-								$crate::rdf_rs::RDF_LANG_STRING.into(),
-							)
+						$crate::rdfx::CowLiteralType::LangString(_)
+						| $crate::rdfx::CowLiteralType::DirLangString { .. } => {
+							literal_ty = Some($crate::rdfx::RDF_LANG_STRING.into())
 						}
 					}
 				}
@@ -145,4 +150,12 @@ mod test {
 	}
 
 	json_literal!(Test);
+
+	#[test]
+	fn json_literal_macro_accepts_a_serde_type() {
+		let test = Test {
+			field: "value".to_owned(),
+		};
+		assert_eq!(test.field, "value");
+	}
 }

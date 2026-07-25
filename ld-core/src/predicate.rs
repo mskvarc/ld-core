@@ -1,8 +1,8 @@
 use iri_rs::IriBuf;
-use rdf_rs::{
+use rdfx::{
+	BlankId, BlankIdBuf, Id, Interpretation,
 	dataset::PatternMatchingDataset,
 	interpretation::{ReverseInterpretation, ReverseLocalInterpretation},
-	BlankId, BlankIdBuf, Id, Interpretation,
 };
 
 use crate::{
@@ -12,6 +12,7 @@ use crate::{
 
 /// Type representing the objects of an RDF subject's predicate binding.
 pub trait LinkedDataPredicateObjects<I: Interpretation = ()> {
+	/// Visits the objects this predicate points at.
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: PredicateObjectsVisitor<I>;
@@ -26,8 +27,8 @@ impl<I: Interpretation> LinkedDataPredicateObjects<I> for () {
 	}
 }
 
-impl<'a, I: Interpretation, T: ?Sized + LinkedDataPredicateObjects<I>>
-	LinkedDataPredicateObjects<I> for &'a T
+impl<I: Interpretation, T: ?Sized + LinkedDataPredicateObjects<I>> LinkedDataPredicateObjects<I>
+	for &T
 {
 	fn visit_objects<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
@@ -100,7 +101,7 @@ impl<I: Interpretation> LinkedDataPredicateObjects<I> for IriBuf {
 	}
 }
 
-impl<'i, I: Interpretation> LinkedDataPredicateObjects<I> for iri_rs::Iri<&'i str> {
+impl<I: Interpretation> LinkedDataPredicateObjects<I> for iri_rs::Iri<&str> {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: PredicateObjectsVisitor<I>,
@@ -140,21 +141,29 @@ impl<I: Interpretation> LinkedDataPredicateObjects<I> for Id {
 	}
 }
 
+/// Visitor over the objects of a predicate.
 pub trait PredicateObjectsVisitor<I: Interpretation> {
+	/// Value returned once every object has been visited.
 	type Ok;
+	/// Error type.
 	type Error;
 
+	/// Visits an object of the predicate.
 	fn object<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
 		T: ?Sized + LinkedDataResource<I> + LinkedDataSubject<I>;
 
+	/// Ends the objects visit.
 	fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
+/// Type that can be deserialized from the objects of a predicate.
 pub trait LinkedDataDeserializePredicateObjects<I: Interpretation>: Sized
 where
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
+	/// Deserializes a value from `objects`, reporting errors against
+	/// `context`.
 	fn deserialize_objects_in<'a, D>(
 		interpretation: &I,
 		dataset: &D,
@@ -166,6 +175,7 @@ where
 		I::Resource: 'a,
 		D: PatternMatchingDataset<Subject = I::Resource>;
 
+	/// Deserializes a value from `objects`.
 	fn deserialize_objects<'a, D>(
 		interpretation: &I,
 		dataset: &D,
@@ -198,7 +208,13 @@ macro_rules! deserialize_single_object {
 			match objects.next() {
 				Some(object) => {
 					if objects.next().is_none() {
-						Self::deserialize_subject_in(interpretation, dataset, graph, object, context)
+						Self::deserialize_subject_in(
+							interpretation,
+							dataset,
+							graph,
+							object,
+							context,
+						)
 					} else {
 						Err(FromLinkedDataError::TooManyValues(
 							context.into_iris(interpretation),
@@ -216,7 +232,7 @@ macro_rules! deserialize_single_object {
 impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for IriBuf
 where
 	I: ReverseInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	deserialize_single_object!();
 }
@@ -224,7 +240,7 @@ where
 impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for BlankIdBuf
 where
 	I: ReverseInterpretation + ReverseLocalInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	deserialize_single_object!();
 }
@@ -232,7 +248,7 @@ where
 impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for Id
 where
 	I: ReverseInterpretation + ReverseLocalInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	deserialize_single_object!();
 }
@@ -240,7 +256,7 @@ where
 impl<I: Interpretation, T: LinkedDataDeserializePredicateObjects<I>>
 	LinkedDataDeserializePredicateObjects<I> for Box<T>
 where
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_objects_in<'a, D>(
 		interpretation: &I,
@@ -261,7 +277,7 @@ impl<I: Interpretation, T: LinkedDataDeserializeSubject<I>> LinkedDataDeserializ
 	for Option<T>
 where
 	I: ReverseInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_objects_in<'a, D>(
 		interpretation: &I,

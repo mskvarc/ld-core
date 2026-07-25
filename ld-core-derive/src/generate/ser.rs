@@ -1,8 +1,8 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
-use syn::{spanned::Spanned, DeriveInput};
+use syn::{DeriveInput, spanned::Spanned};
 
-use super::{read_field_attributes, read_type_attributes, Error, TypeAttributes};
+use super::{Error, TypeAttributes, read_field_attributes, read_type_attributes};
 
 mod r#enum;
 mod r#struct;

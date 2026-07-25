@@ -1,6 +1,5 @@
-//! This library defines the derive macros for the `linked_data` library. It is
-//! not meant to be used directly. It is reexported by the `linked_data`
-//! library.
+//! Derive macros for the `ld-core` library. Not meant to be used directly:
+//! `ld-core` re-exports them behind its `derive` feature.
 use proc_macro::TokenStream;
 use proc_macro_error::{abort, proc_macro_error};
 use syn::DeriveInput;
@@ -8,6 +7,10 @@ use syn::DeriveInput;
 mod generate;
 pub(crate) mod utils;
 
+/// Derives the `LinkedData` serialization traits from `#[ld(...)]`
+/// attributes.
+///
+/// See the `ld-core` documentation for the attribute vocabulary.
 #[proc_macro_derive(Serialize, attributes(ld))]
 #[proc_macro_error]
 pub fn derive_serialize(item: TokenStream) -> TokenStream {
@@ -24,6 +27,10 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
 	output.into()
 }
 
+/// Derives the `FromLinkedData` deserialization traits from `#[ld(...)]`
+/// attributes.
+///
+/// See the `ld-core` documentation for the attribute vocabulary.
 #[proc_macro_derive(Deserialize, attributes(ld))]
 #[proc_macro_error]
 pub fn derive_deserialize(item: TokenStream) -> TokenStream {

@@ -5,7 +5,9 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{DeriveInput, spanned::Spanned};
 
-use super::{Error, InterpretationBounds, TypeAttributes, read_field_attributes, read_type_attributes};
+use super::{
+	Error, InterpretationBounds, TypeAttributes, read_field_attributes, read_type_attributes,
+};
 
 mod r#enum;
 mod r#struct;
@@ -124,14 +126,14 @@ fn generate_field(
 			Ok(Some(quote! {
 				{
 					let _iri_buf = ::ld_core::iri_rs::IriBuf::new(#iri.to_owned()).unwrap();
-					match ::ld_core::rdf_rs::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
+					match ::ld_core::rdfx::Interpretation::iri(interpretation_, _iri_buf.as_ref()) {
 						Some(predicate_) => {
 							let context_ = context_.with_predicate(&predicate_);
 							::ld_core::LinkedDataDeserializePredicateObjects::deserialize_objects_in(
 								interpretation_,
 								dataset_,
 								graph_,
-								::ld_core::rdf_rs::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
+								::ld_core::rdfx::dataset::PatternMatchingDataset::quad_objects(dataset_, graph_, resource_, &predicate_),
 								context_
 							)?
 						}
@@ -152,8 +154,7 @@ fn generate_field(
 		None => {
 			if attrs.is_id || attrs.flatten {
 				bounds.push(
-					syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_>))
-						.unwrap(),
+					syn::parse2(quote!(#ty: ::ld_core::LinkedDataDeserializeSubject<I_>)).unwrap(),
 				);
 
 				Ok(Some(quote! {

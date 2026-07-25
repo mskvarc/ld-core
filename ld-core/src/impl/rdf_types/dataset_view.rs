@@ -4,23 +4,23 @@ use crate::{
 	GraphVisitor, LinkedDataGraph, LinkedDataPredicateObjects, LinkedDataResource,
 	LinkedDataSubject, PredicateObjectsVisitor, ResourceInterpretation, SubjectVisitor,
 };
-use rdf_rs::{
+use rdfx::{
+	Interpretation, Quad,
 	dataset::{
 		DatasetView, Graph, PatternMatchingDataset, PredicateTraversableDataset,
 		SubjectTraversableDataset,
 	},
-	Interpretation, Quad,
 };
 
 impl<'a, I: Interpretation, D> LinkedDataGraph<I> for DatasetView<'a, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,
-	<D as rdf_rs::dataset::Dataset>::Graph: PartialEq<I::Resource>,
+	<D as rdfx::dataset::Dataset>::Graph: PartialEq<I::Resource>,
 {
 	fn visit_graph<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
@@ -62,10 +62,10 @@ where
 	}
 }
 
-struct PredicateObjects<'d, 'v, D: rdf_rs::dataset::Dataset>
+struct PredicateObjects<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
@@ -77,8 +77,8 @@ where
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataPredicateObjects<I> for PredicateObjects<'d, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
@@ -108,18 +108,18 @@ where
 impl<'a, 'v, D, I: Interpretation> LinkedDataResource<I> for Object<'a, 'v, D>
 where
 	I::Resource: LinkedDataResource<I>,
-	D: rdf_rs::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
+	D::Subject: rdfx::Resource,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
 		self.object.interpretation(interpretation)
 	}
 }
 
-struct Object<'a, 'v, D: rdf_rs::dataset::Dataset>
+struct Object<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'a D,
 	graph: Option<&'a D::Subject>,
@@ -130,8 +130,8 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataSubject<I> for Object<'a, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
@@ -160,10 +160,10 @@ where
 	}
 }
 
-struct Subject<'a, 'v, D: rdf_rs::dataset::Dataset>
+struct Subject<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'a D,
 	graph: Option<&'a D::Subject>,
@@ -175,11 +175,11 @@ where
 
 impl<'a, 'v, D> Subject<'a, 'v, D>
 where
-	D: rdf_rs::dataset::Dataset
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource + Eq + Hash,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	fn new(
 		dataset: &'a D,
@@ -199,11 +199,14 @@ where
 		}
 	}
 
-	fn visit<I: Interpretation<Resource = D::Subject>, S>(&self, visitor: &mut S) -> Result<(), S::Error>
+	fn visit<I: Interpretation<Resource = D::Subject>, S>(
+		&self,
+		visitor: &mut S,
+	) -> Result<(), S::Error>
 	where
 		S: SubjectVisitor<I>,
 		D::Subject: LinkedDataResource<I>,
-		<D as rdf_rs::dataset::Dataset>::Graph: PartialEq<D::Subject>,
+		<D as rdfx::dataset::Dataset>::Graph: PartialEq<D::Subject>,
 	{
 		if self.visit_predicates {
 			for (predicate, _) in self
@@ -241,8 +244,8 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for Subject<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
+	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
 		self.subject.interpretation(interpretation)
@@ -251,8 +254,8 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataSubject<I> for Subject<'a, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
@@ -283,10 +286,10 @@ where
 	}
 }
 
-struct NamedGraphView<'a, 'v, D: rdf_rs::dataset::Dataset>
+struct NamedGraphView<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdf_rs::Resource,
+	D::Subject: rdfx::Resource,
 {
 	dataset: &'a D,
 	graph: &'a D::Subject,
@@ -295,8 +298,8 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for NamedGraphView<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
+	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
 		self.graph.interpretation(interpretation)
@@ -305,13 +308,13 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataGraph<I> for NamedGraphView<'a, 'v, D>
 where
-	I::Resource: Eq + Hash + LinkedDataResource<I> + rdf_rs::Resource,
-	D: rdf_rs::dataset::Dataset
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
+	D: rdfx::dataset::Dataset
 		+ SubjectTraversableDataset
 		+ PredicateTraversableDataset
 		+ PatternMatchingDataset
 		+ Graph<Subject = I::Resource>,
-	<D as rdf_rs::dataset::Dataset>::Graph: PartialEq<I::Resource>,
+	<D as rdfx::dataset::Dataset>::Graph: PartialEq<I::Resource>,
 {
 	fn visit_graph<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where

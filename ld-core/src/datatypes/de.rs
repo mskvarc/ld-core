@@ -1,7 +1,8 @@
-use rdf_rs::{interpretation::ReverseInterpretation, Interpretation, RDF_LANG_STRING};
+use rdfx::{Interpretation, RDF_LANG_STRING, interpretation::ReverseInterpretation};
 
 use crate::{
-	Context, FromLinkedDataError, LinkedDataDeserializePredicateObjects, LinkedDataDeserializeSubject,
+	Context, FromLinkedDataError, LinkedDataDeserializePredicateObjects,
+	LinkedDataDeserializeSubject,
 };
 
 macro_rules! deserialize_datatype {
@@ -10,7 +11,7 @@ macro_rules! deserialize_datatype {
 			impl<I: Interpretation> LinkedDataDeserializeSubject<I> for $ty
 			where
 				I: ReverseInterpretation,
-				I::Resource: rdf_rs::Resource,
+				I::Resource: rdfx::Resource,
 			{
 				fn deserialize_subject_in<D>(
 					interpretation: &I,
@@ -20,12 +21,12 @@ macro_rules! deserialize_datatype {
 					context: Context<I>
 				) -> Result<Self, FromLinkedDataError>
 				where
-					D: rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>
+					D: rdfx::dataset::PatternMatchingDataset<Subject = I::Resource>
 				{
 					let mut literal_ty = None;
 					for l in interpretation.literals_of(resource) {
 						match &l.type_ {
-							rdf_rs::CowLiteralType::Any(ty) => {
+							rdfx::CowLiteralType::Any(ty) => {
 								let ty_iri = ty.as_iri();
 								if ty_iri.as_str() == xsd_rs::$iri.as_str() {
 									return match l.value.parse() {
@@ -38,8 +39,8 @@ macro_rules! deserialize_datatype {
 
 								literal_ty = Some(ty_iri.into())
 							}
-							rdf_rs::CowLiteralType::LangString(_)
-							| rdf_rs::CowLiteralType::DirLangString { .. } => {
+							rdfx::CowLiteralType::LangString(_)
+							| rdfx::CowLiteralType::DirLangString { .. } => {
 								literal_ty = Some(RDF_LANG_STRING.into())
 							}
 						}
@@ -65,7 +66,7 @@ macro_rules! deserialize_datatype {
 			impl<I: Interpretation> LinkedDataDeserializePredicateObjects<I> for $ty
 			where
 				I: ReverseInterpretation,
-				I::Resource: rdf_rs::Resource,
+				I::Resource: rdfx::Resource,
 			{
 				fn deserialize_objects_in<'a, D>(
 					interpretation: &I,
@@ -76,7 +77,7 @@ macro_rules! deserialize_datatype {
 				) -> Result<Self, FromLinkedDataError>
 				where
 					<I as Interpretation>::Resource: 'a,
-					D: rdf_rs::dataset::PatternMatchingDataset<Subject = I::Resource>
+					D: rdfx::dataset::PatternMatchingDataset<Subject = I::Resource>
 				{
 					let mut error = None;
 

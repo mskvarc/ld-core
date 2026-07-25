@@ -1,5 +1,5 @@
-use ld_core::rdf_rs::{generator, RdfDisplay};
-use ld_core::{to_quads, Deserialize, LinkedDataResource, Serialize};
+use ld_core::rdfx::{RdfDisplay, generator};
+use ld_core::{Deserialize, LinkedDataResource, Serialize, to_quads};
 
 #[derive(Serialize, Deserialize)]
 #[ld(prefix("ex" = "http://example.org/"))]
@@ -36,7 +36,14 @@ enum Ids {
 
 fn main() {
 	let a = Subject::Name("A".to_string());
-	println!("{:?}", a.interpretation(&mut ld_core::rdf_rs::generator::LocalGeneratorInterpretation::new(generator::Blank::new())));
+	println!(
+		"{:?}",
+		a.interpretation(
+			&mut ld_core::rdfx::generator::LocalGeneratorInterpretation::new(
+				generator::Blank::new()
+			)
+		)
+	);
 
 	println!();
 	let b = SubjectCompound::Name("B".to_string());
@@ -61,5 +68,12 @@ fn main() {
 
 	println!();
 	let e = Ids::A;
-	println!("{:?}", e.interpretation(&mut ld_core::rdf_rs::generator::LocalGeneratorInterpretation::new(generator::Blank::new())));
+	println!(
+		"{:?}",
+		e.interpretation(
+			&mut ld_core::rdfx::generator::LocalGeneratorInterpretation::new(
+				generator::Blank::new()
+			)
+		)
+	);
 }

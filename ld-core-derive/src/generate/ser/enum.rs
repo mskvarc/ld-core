@@ -5,13 +5,13 @@ use syn::{punctuated::Punctuated, spanned::Spanned};
 
 use crate::{
 	generate::{
-		extend_generics, read_variant_attributes, InterpretationBounds, TypeAttributes,
-		VariantAttributes,
+		InterpretationBounds, TypeAttributes, VariantAttributes, extend_generics,
+		read_variant_attributes,
 	},
 	utils::UsesGenericParam,
 };
 
-use super::{variant_compound_fields, Error};
+use super::{Error, variant_compound_fields};
 
 pub fn generate(
 	attrs: &TypeAttributes,
@@ -115,7 +115,7 @@ pub fn generate(
 
 	lexical_repr_bounds.push(
 		syn::parse2(quote! {
-			I_: ::ld_core::rdf_rs::Interpretation
+			I_: ::ld_core::rdfx::Interpretation
 		})
 		.unwrap(),
 	);
@@ -135,8 +135,11 @@ pub fn generate(
 		InterpretationBounds::default(),
 		visit_predicate_bounds,
 	);
-	let graph_generics =
-		extend_generics(&generics, InterpretationBounds::default(), visit_graph_bounds);
+	let graph_generics = extend_generics(
+		&generics,
+		InterpretationBounds::default(),
+		visit_graph_bounds,
+	);
 	let dataset_generics =
 		extend_generics(&generics, InterpretationBounds::default(), visit_ld_bounds);
 

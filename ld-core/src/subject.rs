@@ -1,8 +1,8 @@
 use iri_rs::IriBuf;
-use rdf_rs::{
+use rdfx::{
+	BlankId, BlankIdBuf, Id, Interpretation,
 	dataset::PatternMatchingDataset,
 	interpretation::{ReverseInterpretation, ReverseLocalInterpretation},
-	BlankId, BlankIdBuf, Id, Interpretation,
 };
 
 use crate::{
@@ -11,6 +11,7 @@ use crate::{
 
 /// Serialize a Linked-Data node.
 pub trait LinkedDataSubject<I: Interpretation = ()> {
+	/// Visits the properties of the subject represented by this value.
 	fn visit_subject<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: SubjectVisitor<I>;
@@ -25,7 +26,7 @@ impl<I: Interpretation> LinkedDataSubject<I> for () {
 	}
 }
 
-impl<'a, I: Interpretation, T: ?Sized + LinkedDataSubject<I>> LinkedDataSubject<I> for &'a T {
+impl<I: Interpretation, T: ?Sized + LinkedDataSubject<I>> LinkedDataSubject<I> for &T {
 	fn visit_subject<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: SubjectVisitor<I>,
@@ -52,7 +53,7 @@ impl<I: Interpretation> LinkedDataSubject<I> for IriBuf {
 	}
 }
 
-impl<'i, I: Interpretation> LinkedDataSubject<I> for iri_rs::Iri<&'i str> {
+impl<I: Interpretation> LinkedDataSubject<I> for iri_rs::Iri<&str> {
 	fn visit_subject<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
 		S: SubjectVisitor<I>,
@@ -88,8 +89,11 @@ impl<I: Interpretation> LinkedDataSubject<I> for Id {
 	}
 }
 
+/// Visitor over the properties of an RDF subject.
 pub trait SubjectVisitor<I: Interpretation> {
+	/// Value returned once the subject has been entirely visited.
 	type Ok;
+	/// Error type.
 	type Error;
 
 	/// Visit a predicate of the graph.
@@ -104,18 +108,21 @@ pub trait SubjectVisitor<I: Interpretation> {
 		L: ?Sized + LinkedDataResource<I>,
 		T: ?Sized + LinkedDataPredicateObjects<I>;
 
+	/// Visits a graph named by the subject.
 	fn graph<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
 		T: ?Sized + LinkedDataGraph<I>;
 
+	/// Includes another subject in the same graph.
 	fn include<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
 		T: ?Sized + LinkedDataResource<I> + LinkedDataSubject<I>;
 
+	/// Ends the subject visit.
 	fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
-impl<'s, I: Interpretation, S: SubjectVisitor<I>> SubjectVisitor<I> for &'s mut S {
+impl<I: Interpretation, S: SubjectVisitor<I>> SubjectVisitor<I> for &mut S {
 	type Ok = ();
 	type Error = S::Error;
 
@@ -154,10 +161,13 @@ impl<'s, I: Interpretation, S: SubjectVisitor<I>> SubjectVisitor<I> for &'s mut 
 	}
 }
 
+/// Type that can be deserialized from a subject of an RDF dataset.
 pub trait LinkedDataDeserializeSubject<I: Interpretation>: Sized
 where
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
+	/// Deserializes a value from `resource`, reporting errors against
+	/// `context`.
 	fn deserialize_subject_in<D>(
 		interpretation: &I,
 		dataset: &D,
@@ -168,6 +178,7 @@ where
 	where
 		D: PatternMatchingDataset<Subject = I::Resource>;
 
+	/// Deserializes a value from `resource`.
 	fn deserialize_subject<D>(
 		interpretation: &I,
 		dataset: &D,
@@ -177,20 +188,14 @@ where
 	where
 		D: PatternMatchingDataset<Subject = I::Resource>,
 	{
-		Self::deserialize_subject_in(
-			interpretation,
-			dataset,
-			graph,
-			resource,
-			Context::default(),
-		)
+		Self::deserialize_subject_in(interpretation, dataset, graph, resource, Context::default())
 	}
 }
 
 impl<I: Interpretation> LinkedDataDeserializeSubject<I> for IriBuf
 where
 	I: ReverseInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_subject_in<D>(
 		interpretation: &I,
@@ -215,7 +220,7 @@ where
 impl<I: Interpretation> LinkedDataDeserializeSubject<I> for BlankIdBuf
 where
 	I: ReverseInterpretation + ReverseLocalInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_subject_in<D>(
 		interpretation: &I,
@@ -231,7 +236,10 @@ where
 			Some(b) => Ok(b.into_owned()),
 			None => Err(FromLinkedDataError::InvalidSubject {
 				context: context.into_iris(interpretation),
-				subject: interpretation.iris_of(resource).next().map(|i| i.into_owned()),
+				subject: interpretation
+					.iris_of(resource)
+					.next()
+					.map(|i| i.into_owned()),
 			}),
 		}
 	}
@@ -240,7 +248,7 @@ where
 impl<I: Interpretation> LinkedDataDeserializeSubject<I> for Id
 where
 	I: ReverseInterpretation + ReverseLocalInterpretation,
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_subject_in<D>(
 		interpretation: &I,
@@ -268,7 +276,7 @@ where
 impl<I: Interpretation, T: LinkedDataDeserializeSubject<I>> LinkedDataDeserializeSubject<I>
 	for Box<T>
 where
-	I::Resource: rdf_rs::Resource,
+	I::Resource: rdfx::Resource,
 {
 	fn deserialize_subject_in<D>(
 		interpretation: &I,

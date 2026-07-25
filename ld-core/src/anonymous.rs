@@ -1,5 +1,5 @@
 use iri_rs::Iri;
-use rdf_rs::Interpretation;
+use rdfx::Interpretation;
 
 use crate::{
 	BorrowedRdfTerm, CowRdfTerm, GraphVisitor, LinkedData, LinkedDataGraph,
@@ -7,9 +7,11 @@ use crate::{
 	ResourceInterpretation, SubjectVisitor, Visitor,
 };
 
+/// Binding of a value to a predicate, serialized on an anonymous subject.
 pub struct AnonymousBinding<'a, T>(pub Iri<&'a str>, pub &'a T);
 
 impl<'a, T> AnonymousBinding<'a, T> {
+	/// Binds `value` to the `iri` predicate.
 	pub fn new(iri: Iri<&'a str>, value: &'a T) -> Self {
 		Self(iri, value)
 	}

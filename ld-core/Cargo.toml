@@ -1,32 +1,37 @@
 [package]
 name = "ld-core"
-description = "Linked-Data dateset serialization/deserialization traits"
-categories = ["encoding", "web-programming"]
-keywords = ["semantic-web", "linked-data", "rdf", "serialization"]
+description = "Linked-Data dataset serialization and deserialization traits, with derive macros"
+categories = ["encoding", "web-programming", "data-structures"]
+keywords = ["semantic-web", "linked-data", "rdf", "serialization", "derive"]
 authors.workspace = true
 license.workspace = true
+readme.workspace = true
 repository.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 version.workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [features]
 default = ["derive", "serde"]
-derive = ["ld-core-derive"]
+derive = ["dep:ld-core-derive"]
+serde = ["dep:serde"]
 
 [dependencies]
 educe = "0.6.0"
 im = "15.1.0"
 iri-rs = { version = "3.3.2", features = ["static"] }
-jstrict = { git = "ssh://git@github.com/mskvarc/jstrict.git", features = ["canonicalize"] }
+jstrict = { version = "0.13.0", features = ["canonicalize"] }
 ld-core-derive = { workspace = true, optional = true }
-rdf-rs = { git = "ssh://git@github.com/mskvarc/rdf-rs.git", version = "0.23.0" }
-serde = { version = "1.0", features = ["derive"], optional = true }
-xsd-rs = { git = "ssh://git@github.com/mskvarc/xsd-rs.git", version = "0.10.0" }
+rdfx = "0.23.0"
+serde = { version = "1.0.228", features = ["derive"], optional = true }
 thiserror = "2.0.18"
+xsd-rs = "0.10.0"
 
 [dev-dependencies]
-jstrict = { git = "ssh://git@github.com/mskvarc/jstrict.git", features = ["serde"] }
+jstrict = { version = "0.13.0", features = ["serde"] }
 
 [[example]]
 name = "derive"

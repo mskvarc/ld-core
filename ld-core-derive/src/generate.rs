@@ -126,30 +126,30 @@ impl InterpretationBounds {
 impl ToTokens for InterpretationBounds {
 	fn to_tokens(&self, tokens: &mut TokenStream) {
 		tokens.extend(quote! {
-			::ld_core::rdf_rs::Interpretation
+			::ld_core::rdfx::Interpretation
 		});
 
 		if self.mut_ {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_rs::InterpretationMut
+				+ ::ld_core::rdfx::InterpretationMut
 			})
 		}
 
 		if self.local_mut {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_rs::interpretation::LocalInterpretationMut
+				+ ::ld_core::rdfx::interpretation::LocalInterpretationMut
 			})
 		}
 
 		if self.reverse {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_rs::interpretation::ReverseInterpretation
+				+ ::ld_core::rdfx::interpretation::ReverseInterpretation
 			})
 		}
 
 		if self.reverse_local {
 			tokens.extend(quote! {
-				+ ::ld_core::rdf_rs::interpretation::ReverseLocalInterpretation
+				+ ::ld_core::rdfx::interpretation::ReverseLocalInterpretation
 			})
 		}
 	}
@@ -183,7 +183,7 @@ fn extend_generics(
 	if needs_resource_bound {
 		bounds.push(
 			syn::parse2(quote! {
-				<I_ as ::ld_core::rdf_rs::Interpretation>::Resource: ::ld_core::rdf_rs::Resource
+				<I_ as ::ld_core::rdfx::Interpretation>::Resource: ::ld_core::rdfx::Resource
 			})
 			.unwrap(),
 		);
@@ -225,13 +225,13 @@ fn read_type_attributes(attributes: Vec<syn::Attribute>) -> Result<TypeAttribute
 										return Err(Error::InvalidAttribute(
 											AttributeError::UnexpectedToken,
 											token.span(),
-										))
+										));
 									}
 									None => {
 										return Err(Error::InvalidAttribute(
 											AttributeError::MissingPrefixBinding,
 											span,
-										))
+										));
 									}
 								}
 							} else if id == "type" {
@@ -250,14 +250,14 @@ fn read_type_attributes(attributes: Vec<syn::Attribute>) -> Result<TypeAttribute
 														return Err(Error::InvalidAttribute(
 															AttributeError::InvalidType,
 															span,
-														))
+														));
 													}
 												},
 												_ => {
 													return Err(Error::InvalidAttribute(
 														AttributeError::InvalidType,
 														span,
-													))
+													));
 												}
 											}
 										}
@@ -265,26 +265,26 @@ fn read_type_attributes(attributes: Vec<syn::Attribute>) -> Result<TypeAttribute
 											return Err(Error::InvalidAttribute(
 												AttributeError::UnexpectedToken,
 												token.span(),
-											))
+											));
 										}
 										None => {
 											return Err(Error::InvalidAttribute(
 												AttributeError::MissingType,
 												span,
-											))
+											));
 										}
 									},
 									Some(token) => {
 										return Err(Error::InvalidAttribute(
 											AttributeError::UnexpectedToken,
 											token.span(),
-										))
+										));
 									}
 									None => {
 										return Err(Error::InvalidAttribute(
 											AttributeError::MissingType,
 											span,
-										))
+										));
 									}
 								}
 							} else {
@@ -298,7 +298,7 @@ fn read_type_attributes(attributes: Vec<syn::Attribute>) -> Result<TypeAttribute
 							return Err(Error::InvalidAttribute(
 								AttributeError::UnexpectedToken,
 								token.span(),
-							))
+							));
 						}
 						None => return Err(Error::InvalidAttribute(AttributeError::Empty, span)),
 					}
@@ -307,7 +307,7 @@ fn read_type_attributes(attributes: Vec<syn::Attribute>) -> Result<TypeAttribute
 					return Err(Error::InvalidAttribute(
 						AttributeError::InvalidShape,
 						attr.span(),
-					))
+					));
 				}
 			}
 		}
@@ -406,14 +406,14 @@ fn read_field_attributes(attributes: Vec<syn::Attribute>) -> Result<FieldAttribu
 											return Err(Error::InvalidAttribute(
 												AttributeError::InvalidCompactIri,
 												l.span(),
-											))
+											));
 										}
 									},
 									l => {
 										return Err(Error::InvalidAttribute(
 											AttributeError::ExpectedString,
 											l.span(),
-										))
+										));
 									}
 								}
 							}
@@ -421,7 +421,7 @@ fn read_field_attributes(attributes: Vec<syn::Attribute>) -> Result<FieldAttribu
 								return Err(Error::InvalidAttribute(
 									AttributeError::UnexpectedToken,
 									token.span(),
-								))
+								));
 							}
 						}
 
@@ -431,7 +431,7 @@ fn read_field_attributes(attributes: Vec<syn::Attribute>) -> Result<FieldAttribu
 								return Err(Error::InvalidAttribute(
 									AttributeError::UnexpectedToken,
 									token.span(),
-								))
+								));
 							}
 							None => break,
 						}
@@ -441,7 +441,7 @@ fn read_field_attributes(attributes: Vec<syn::Attribute>) -> Result<FieldAttribu
 					return Err(Error::InvalidAttribute(
 						AttributeError::InvalidShape,
 						attr.span(),
-					))
+					));
 				}
 			}
 		}
@@ -471,7 +471,7 @@ fn read_variant_attributes(attributes: Vec<syn::Attribute>) -> Result<VariantAtt
 					return Err(Error::InvalidAttribute(
 						AttributeError::InvalidShape,
 						attr.span(),
-					))
+					));
 				}
 			}
 		}

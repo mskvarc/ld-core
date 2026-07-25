@@ -1,4 +1,4 @@
-use rdf_rs::Interpretation;
+use rdfx::Interpretation;
 
 use crate::{
 	LinkedData, LinkedDataGraph, LinkedDataPredicateObjects, LinkedDataResource, LinkedDataSubject,
@@ -7,6 +7,8 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(transparent))]
+/// Wrapper serializing its value as a reference: the subject is emitted
+/// as an object, without its own properties.
 pub struct Ref<T>(pub T);
 
 impl<T> From<T> for Ref<T> {

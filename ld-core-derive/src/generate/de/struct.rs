@@ -1,9 +1,9 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
-use crate::generate::{extend_generics, TypeAttributes};
+use crate::generate::{TypeAttributes, extend_generics};
 
-use super::{generate_fields, Error, FieldsDeserialization};
+use super::{Error, FieldsDeserialization, generate_fields};
 
 pub fn generate(
 	attrs: &TypeAttributes,
@@ -34,7 +34,7 @@ pub fn generate(
 				context_: ::ld_core::Context<I_>
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
-				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
+				D_: ::ld_core::rdfx::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let context_ = context_.with_subject(resource_);
 				#(#deserialize_fields)*
@@ -52,7 +52,7 @@ pub fn generate(
 			) -> Result<Self, ::ld_core::FromLinkedDataError>
 			where
 				I_::Resource: 'de_,
-				D_: ::ld_core::rdf_rs::dataset::PatternMatchingDataset<Subject = I_::Resource>
+				D_: ::ld_core::rdfx::dataset::PatternMatchingDataset<Subject = I_::Resource>
 			{
 				let mut objects = objects.into_iter();
 

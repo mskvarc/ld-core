@@ -1,10 +1,11 @@
 use iri_rs::IriBuf;
-use rdf_rs::Interpretation;
+use rdfx::Interpretation;
 
 use crate::{LinkedData, LinkedDataPredicateObjects, LinkedDataResource, LinkedDataSubject};
 
 /// Serialize a Linked-Data graph.
 pub trait LinkedDataGraph<I: Interpretation = ()> {
+	/// Visits the subjects of the graph represented by this value.
 	fn visit_graph<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: GraphVisitor<I>;
@@ -19,7 +20,7 @@ impl<I: Interpretation> LinkedDataGraph<I> for () {
 	}
 }
 
-impl<'a, I: Interpretation, T: ?Sized + LinkedDataGraph<I>> LinkedDataGraph<I> for &'a T {
+impl<I: Interpretation, T: ?Sized + LinkedDataGraph<I>> LinkedDataGraph<I> for &T {
 	fn visit_graph<S>(&self, visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: GraphVisitor<I>,
@@ -74,18 +75,23 @@ impl<I: Interpretation, T: LinkedDataSubject<I> + LinkedDataResource<I>> LinkedD
 	}
 }
 
+/// Visitor over the subjects of an RDF graph.
 pub trait GraphVisitor<I: Interpretation> {
+	/// Value returned once the graph has been entirely visited.
 	type Ok;
+	/// Error type.
 	type Error;
 
+	/// Visits a subject of the graph.
 	fn subject<T>(&mut self, value: &T) -> Result<(), Self::Error>
 	where
 		T: ?Sized + LinkedDataResource<I> + LinkedDataSubject<I>;
 
+	/// Ends the graph visit.
 	fn end(self) -> Result<Self::Ok, Self::Error>;
 }
 
-impl<'a, I: Interpretation, S: GraphVisitor<I>> GraphVisitor<I> for &'a mut S {
+impl<I: Interpretation, S: GraphVisitor<I>> GraphVisitor<I> for &mut S {
 	type Ok = ();
 	type Error = S::Error;
 
@@ -101,13 +107,11 @@ impl<'a, I: Interpretation, S: GraphVisitor<I>> GraphVisitor<I> for &'a mut S {
 	}
 }
 
+/// Wrapper serializing its value as an anonymous graph.
 pub struct AnonymousGraph<T>(pub T);
 
 impl<I: Interpretation, T> LinkedDataResource<I> for AnonymousGraph<T> {
-	fn interpretation(
-		&self,
-		_interpretation: &mut I,
-	) -> crate::ResourceInterpretation<'_, I> {
+	fn interpretation(&self, _interpretation: &mut I) -> crate::ResourceInterpretation<'_, I> {
 		crate::ResourceInterpretation::Uninterpreted(None)
 	}
 }
@@ -122,9 +126,7 @@ impl<I: Interpretation, T: LinkedDataGraph<I>> LinkedDataSubject<I> for Anonymou
 	}
 }
 
-impl<I: Interpretation, T: LinkedDataGraph<I>> LinkedDataPredicateObjects<I>
-	for AnonymousGraph<T>
-{
+impl<I: Interpretation, T: LinkedDataGraph<I>> LinkedDataPredicateObjects<I> for AnonymousGraph<T> {
 	fn visit_objects<S>(&self, mut visitor: S) -> Result<S::Ok, S::Error>
 	where
 		S: crate::PredicateObjectsVisitor<I>,
