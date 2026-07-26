@@ -2,12 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.4.0] - 2026-07-26
+
+### 🧹 Chores
+- Raise msrv to 1.96.0
+
 ## [v0.3.0] - 2026-07-26
 
 ### 🐛 Bug Fixes
 - Clippy warnings
 
 ### 🧹 Chores
+- Changelog
 - Update and cleanup dependencies
 
 ## [v0.2.0] - 2026-07-25
