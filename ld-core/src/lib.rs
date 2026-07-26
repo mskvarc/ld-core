@@ -117,14 +117,18 @@ pub enum FromLinkedDataError {
 	ExpectedLiteral(ContextIris),
 
 	/// Resource has literal representations, but none of the expected type.
+	///
+	/// The type IRIs are boxed: this is the only variant carrying two of them,
+	/// and inline they would make it the largest variant by a wide margin, which
+	/// sets the size of the whole enum.
 	#[error("literal type mismatch")]
 	LiteralTypeMismatch {
 		/// Error context.
 		context: ContextIris,
 		/// Expected literal type, if the type accepts only one.
-		expected: Option<IriBuf>,
+		expected: Option<Box<IriBuf>>,
 		/// Literal type actually found.
-		found: IriBuf,
+		found: Box<IriBuf>,
 	},
 
 	/// Resource has a literal representation of the correct type, but the
@@ -348,11 +352,11 @@ impl<'a, I: Interpretation> Context<'a, I> {
 		match self {
 			Self::Subject => ContextIris::Subject,
 			Self::Predicate { subject } => ContextIris::Predicate {
-				subject: subject.into_iri(interpretation),
+				subject: subject.into_iri(interpretation).map(Box::new),
 			},
 			Self::Object { subject, predicate } => ContextIris::Object {
-				subject: subject.into_iri(interpretation),
-				predicate: predicate.into_iri(interpretation),
+				subject: subject.into_iri(interpretation).map(Box::new),
+				predicate: predicate.into_iri(interpretation).map(Box::new),
 			},
 		}
 	}
@@ -360,20 +364,26 @@ impl<'a, I: Interpretation> Context<'a, I> {
 
 #[derive(Debug, Clone)]
 /// Error context with its resources resolved into IRIs.
+///
+/// The IRIs are boxed because this type is carried by every
+/// [`FromLinkedDataError`] variant, and therefore sits in the `Err` slot of
+/// every deserialization `Result`. An inline [`IriBuf`] is 56 bytes, which
+/// would make the error — and so every `Result` returned on the success path
+/// too — several times larger than the values being deserialized.
 pub enum ContextIris {
 	/// The value is a subject.
 	Subject,
 	/// The value is a predicate of the given subject.
 	Predicate {
 		/// Subject IRI, if it has one.
-		subject: Option<IriBuf>,
+		subject: Option<Box<IriBuf>>,
 	},
 	/// The value is an object of the given subject and predicate.
 	Object {
 		/// Subject IRI, if it has one.
-		subject: Option<IriBuf>,
+		subject: Option<Box<IriBuf>>,
 		/// Predicate IRI, if it has one.
-		predicate: Option<IriBuf>,
+		predicate: Option<Box<IriBuf>>,
 	},
 }
 

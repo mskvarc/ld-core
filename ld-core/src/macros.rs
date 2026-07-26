@@ -55,8 +55,8 @@ macro_rules! json_literal {
 					Some(object) => {
 						if objects.next().is_none() {
 							<Self as $crate::LinkedDataDeserializeSubject<I>>::deserialize_subject_in(
-																interpretation, dataset, graph, object, context,
-															)
+																		interpretation, dataset, graph, object, context,
+																	)
 						} else {
 							Err($crate::FromLinkedDataError::TooManyValues(
 								context.into_iris(interpretation),
@@ -130,8 +130,8 @@ macro_rules! json_literal {
 				match literal_ty {
 					Some(ty) => Err($crate::FromLinkedDataError::LiteralTypeMismatch {
 						context: context.into_iris(interpretation),
-						expected: Some($crate::RDF_JSON.into()),
-						found: ty,
+						expected: Some(Box::new($crate::RDF_JSON.into())),
+						found: Box::new(ty),
 					}),
 					None => Err($crate::FromLinkedDataError::ExpectedLiteral(
 						context.into_iris(interpretation),

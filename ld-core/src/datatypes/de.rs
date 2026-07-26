@@ -50,8 +50,8 @@ macro_rules! deserialize_datatype {
 						Some(ty) => {
 							Err(FromLinkedDataError::LiteralTypeMismatch {
 								context: context.into_iris(interpretation),
-								expected: Some(xsd_rs::$iri.into()),
-								found: ty
+								expected: Some(Box::new(xsd_rs::$iri.into())),
+								found: Box::new(ty)
 							})
 						}
 						None => {
