@@ -6,7 +6,7 @@ impl UsesGenericParam for syn::Type {
 	fn uses_generic_param(&self, p: &syn::GenericParam) -> bool {
 		match self {
 			Self::Array(a) => a.elem.uses_generic_param(p),
-			Self::BareFn(t) => {
+			Self::FnPtr(t) => {
 				t.inputs.iter().any(|i| i.ty.uses_generic_param(p))
 					|| t.output.uses_generic_param(p)
 			}
@@ -96,7 +96,8 @@ impl UsesGenericParam for syn::PathSegment {
 			syn::PathArguments::None => false,
 			syn::PathArguments::AngleBracketed(a) => a.args.iter().any(|a| a.uses_generic_param(p)),
 			syn::PathArguments::Parenthesized(a) => {
-				a.inputs.iter().any(|i| i.uses_generic_param(p)) || a.output.uses_generic_param(p)
+				a.inputs.iter().any(|i| i.ty.uses_generic_param(p))
+					|| a.output.uses_generic_param(p)
 			}
 		}
 	}

@@ -1,7 +1,6 @@
 //! Derive macros for the `ld-core` library. Not meant to be used directly:
 //! `ld-core` re-exports them behind its `derive` feature.
 use proc_macro::TokenStream;
-use proc_macro_error::{abort, proc_macro_error};
 use syn::DeriveInput;
 
 mod generate;
@@ -12,16 +11,13 @@ pub(crate) mod utils;
 ///
 /// See the `ld-core` documentation for the attribute vocabulary.
 #[proc_macro_derive(Serialize, attributes(ld))]
-#[proc_macro_error]
 pub fn derive_serialize(item: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(item as DeriveInput);
 	let mut output = proc_macro2::TokenStream::new();
 
 	match generate::ser::subject(input) {
 		Ok(tokens) => output.extend(tokens),
-		Err(e) => {
-			abort!(e.span(), e)
-		}
+		Err(e) => output.extend(syn::Error::from(e).to_compile_error()),
 	}
 
 	output.into()
@@ -32,16 +28,13 @@ pub fn derive_serialize(item: TokenStream) -> TokenStream {
 ///
 /// See the `ld-core` documentation for the attribute vocabulary.
 #[proc_macro_derive(Deserialize, attributes(ld))]
-#[proc_macro_error]
 pub fn derive_deserialize(item: TokenStream) -> TokenStream {
 	let input = syn::parse_macro_input!(item as DeriveInput);
 	let mut output = proc_macro2::TokenStream::new();
 
 	match generate::de::subject(input) {
 		Ok(tokens) => output.extend(tokens),
-		Err(e) => {
-			abort!(e.span(), e)
-		}
+		Err(e) => output.extend(syn::Error::from(e).to_compile_error()),
 	}
 
 	output.into()

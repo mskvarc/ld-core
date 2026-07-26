@@ -40,6 +40,16 @@ impl Error {
 		}
 	}
 }
+
+impl From<Error> for syn::Error {
+	/// Carries the error's own [`span`](Error::span) across, so the derive entry
+	/// points render a `compile_error!` at the offending syntax rather than at
+	/// the derive invocation.
+	fn from(e: Error) -> Self {
+		Self::new(e.span(), e)
+	}
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum AttributeError {
 	#[error("invalid shape")]
@@ -167,7 +177,6 @@ fn extend_generics(
 		ident: format_ident!("I_"),
 		colon_token: None,
 		bounds: Punctuated::new(),
-		eq_token: None,
 		default: None,
 	}));
 
