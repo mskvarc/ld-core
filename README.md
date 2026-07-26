@@ -50,7 +50,7 @@ Fork of [`linked-data`](https://crates.io/crates/linked-data) by [Spruce Systems
 - Renamed crates: `linked-data` → `ld-core`, `linked-data-derive` → `ld-core-derive`.
 - Depends on [`rdfx`](https://crates.io/crates/rdfx) instead of `rdf-types`, [`xsd-rs`](https://crates.io/crates/xsd-rs) instead of `xsd-types`, [`iri-rs`](https://crates.io/crates/iri-rs) instead of `iref` / `static-iref`, and [`jstrict`](https://crates.io/crates/jstrict) instead of `json-syntax` — which is the point of the fork.
 - RDF 1.2 aware through `rdfx`: triple terms and directional language strings pass through the quad conversions.
-- Rust 2024 edition, MSRV 1.85 (upstream: 2021, 1.71.1).
+- Rust 2024 edition, MSRV 1.96 (upstream: 2021, 1.71.1).
 - Warning-free build and a reshaped workspace.
 
 Credit and history preserved — see [Attribution](#attribution).
@@ -97,7 +97,7 @@ cargo run --example graph
 
 ## MSRV
 
-Rust 1.85 (edition 2024).
+Rust 1.96 (edition 2024).
 
 ## Attribution
 

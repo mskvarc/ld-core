@@ -23,15 +23,15 @@ serde = ["dep:serde"]
 educe = "0.7.4"
 im = "15.1.0"
 iri-rs = { version = "3.3.7", features = ["static"] }
-jstrict = { version = "0.13.0", features = ["canonicalize"] }
+jstrict = { version = "0.14.0", features = ["canonicalize"] }
 ld-core-derive = { workspace = true, optional = true }
-rdfx = "0.23.2"
+rdfx = "0.24.0"
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 thiserror = "2.0.19"
 xsd-rs = "0.10.0"
 
 [dev-dependencies]
-jstrict = { version = "0.13.0", features = ["serde"] }
+jstrict = { version = "0.14.0", features = ["serde"] }
 
 [[example]]
 name = "derive"
