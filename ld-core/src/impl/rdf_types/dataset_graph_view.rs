@@ -2,6 +2,7 @@ use rdfx::{
 	Interpretation,
 	dataset::{DatasetGraphView, Graph, PatternMatchingDataset, PredicateTraversableDataset},
 };
+use rpds::HashTrieSetSync;
 use std::hash::Hash;
 
 use crate::{
@@ -21,8 +22,8 @@ where
 	where
 		S: SubjectVisitor<I>,
 	{
-		let mut visited = im::HashSet::new();
-		visited.insert(self.resource);
+		let mut visited = HashTrieSetSync::new_sync();
+		visited.insert_mut(self.resource);
 
 		Subject::new(self.dataset, self.graph, self.resource, &visited, true)
 			.visit(&mut serializer)?;
@@ -33,13 +34,13 @@ where
 struct PredicateObjects<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
 	subject: &'d D::Subject,
 	predicate: &'d D::Subject,
-	visited: &'v im::HashSet<&'d D::Subject>,
+	visited: &'v HashTrieSetSync<&'d D::Subject>,
 }
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataPredicateObjects<I> for PredicateObjects<'d, 'v, D>
@@ -72,7 +73,7 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for Object<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
 	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
@@ -83,12 +84,12 @@ where
 struct Object<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
 	object: &'d D::Subject,
-	visited: &'v im::HashSet<&'d D::Subject>,
+	visited: &'v HashTrieSetSync<&'d D::Subject>,
 }
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataSubject<I> for Object<'d, 'v, D>
@@ -104,8 +105,9 @@ where
 		S: SubjectVisitor<I>,
 	{
 		let subject = self.object;
+		let visit_predicates = !self.visited.contains(&subject);
 		let mut visited = self.visited.clone();
-		let visit_predicates = visited.insert(subject).is_none();
+		visited.insert_mut(subject);
 
 		Subject::new(
 			self.dataset,
@@ -123,25 +125,25 @@ where
 struct Subject<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
 	subject: &'d D::Subject,
-	visited: &'v im::HashSet<&'d D::Subject>,
+	visited: &'v HashTrieSetSync<&'d D::Subject>,
 	visit_predicates: bool,
 }
 
 impl<'d, 'v, D> Subject<'d, 'v, D>
 where
 	D: rdfx::dataset::Dataset + PredicateTraversableDataset + PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	fn new(
 		dataset: &'d D,
 		graph: Option<&'d D::Subject>,
 		subject: &'d D::Subject,
-		visited: &'v im::HashSet<&'d D::Subject>,
+		visited: &'v HashTrieSetSync<&'d D::Subject>,
 		visit_predicates: bool,
 	) -> Self {
 		Self {

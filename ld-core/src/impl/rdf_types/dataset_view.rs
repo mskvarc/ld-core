@@ -1,3 +1,4 @@
+use rpds::HashTrieSetSync;
 use std::hash::Hash;
 
 use crate::{
@@ -26,10 +27,10 @@ where
 	where
 		S: GraphVisitor<I>,
 	{
-		let mut visited_subjects = im::HashSet::new();
-		let mut visited_graphs = im::HashSet::new();
+		let mut visited_subjects = HashTrieSetSync::new_sync();
+		let mut visited_graphs = HashTrieSetSync::new_sync();
 		if let Some(g) = self.graph {
-			visited_graphs.insert(g);
+			visited_graphs.insert_mut(g);
 		}
 
 		let mut graph_subjects = Vec::new();
@@ -42,7 +43,7 @@ where
 					.next()
 					.is_some()
 			{
-				visited_subjects.insert(subject);
+				visited_subjects.insert_mut(subject);
 				graph_subjects.push(subject);
 			}
 		}
@@ -65,14 +66,14 @@ where
 struct PredicateObjects<'d, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'d D,
 	graph: Option<&'d D::Subject>,
 	subject: &'d D::Subject,
 	predicate: &'d D::Subject,
-	visited_subjects: &'v im::HashSet<&'d D::Subject>,
-	visited_graphs: &'v im::HashSet<&'d D::Subject>,
+	visited_subjects: &'v HashTrieSetSync<&'d D::Subject>,
+	visited_graphs: &'v HashTrieSetSync<&'d D::Subject>,
 }
 
 impl<'d, 'v, I: Interpretation, D> LinkedDataPredicateObjects<I> for PredicateObjects<'d, 'v, D>
@@ -107,9 +108,9 @@ where
 
 impl<'a, 'v, D, I: Interpretation> LinkedDataResource<I> for Object<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I>,
+	I::Resource: Eq + Hash + LinkedDataResource<I>,
 	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
 		self.object.interpretation(interpretation)
@@ -119,13 +120,13 @@ where
 struct Object<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'a D,
 	graph: Option<&'a D::Subject>,
 	object: &'a D::Subject,
-	visited_subjects: &'v im::HashSet<&'a D::Subject>,
-	visited_graphs: &'v im::HashSet<&'a D::Subject>,
+	visited_subjects: &'v HashTrieSetSync<&'a D::Subject>,
+	visited_graphs: &'v HashTrieSetSync<&'a D::Subject>,
 }
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataSubject<I> for Object<'a, 'v, D>
@@ -143,8 +144,9 @@ where
 	{
 		let subject = self.object;
 
+		let visit_predicates = !self.visited_subjects.contains(&subject);
 		let mut visited_subjects = self.visited_subjects.clone();
-		let visit_predicates = visited_subjects.insert(subject).is_none();
+		visited_subjects.insert_mut(subject);
 
 		Subject::new(
 			self.dataset,
@@ -163,13 +165,13 @@ where
 struct Subject<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'a D,
 	graph: Option<&'a D::Subject>,
 	subject: &'a D::Subject,
-	visited_subjects: &'v im::HashSet<&'a D::Subject>,
-	visited_graphs: &'v im::HashSet<&'a D::Subject>,
+	visited_subjects: &'v HashTrieSetSync<&'a D::Subject>,
+	visited_graphs: &'v HashTrieSetSync<&'a D::Subject>,
 	visit_predicates: bool,
 }
 
@@ -185,8 +187,8 @@ where
 		dataset: &'a D,
 		graph: Option<&'a D::Subject>,
 		subject: &'a D::Subject,
-		visited_subjects: &'v im::HashSet<&'a D::Subject>,
-		visited_graphs: &'v im::HashSet<&'a D::Subject>,
+		visited_subjects: &'v HashTrieSetSync<&'a D::Subject>,
+		visited_graphs: &'v HashTrieSetSync<&'a D::Subject>,
 		visit_predicates: bool,
 	) -> Self {
 		Self {
@@ -226,15 +228,16 @@ where
 				)?;
 			}
 
-			if self.dataset.contains_named_graph(self.subject) {
+			if self.dataset.contains_named_graph(self.subject)
+				&& !self.visited_graphs.contains(&self.subject)
+			{
 				let mut visited_graphs = self.visited_graphs.clone();
-				if visited_graphs.insert(self.subject).is_none() {
-					visitor.graph(&NamedGraphView {
-						dataset: self.dataset,
-						graph: self.subject,
-						visited_graphs: &visited_graphs,
-					})?;
-				}
+				visited_graphs.insert_mut(self.subject);
+				visitor.graph(&NamedGraphView {
+					dataset: self.dataset,
+					graph: self.subject,
+					visited_graphs: &visited_graphs,
+				})?;
 			}
 		}
 
@@ -244,7 +247,7 @@ where
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for Subject<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
 	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
@@ -289,16 +292,16 @@ where
 struct NamedGraphView<'a, 'v, D: rdfx::dataset::Dataset>
 where
 	D: PatternMatchingDataset,
-	D::Subject: rdfx::Resource,
+	D::Subject: rdfx::Resource + Eq + Hash,
 {
 	dataset: &'a D,
 	graph: &'a D::Subject,
-	visited_graphs: &'v im::HashSet<&'a D::Subject>,
+	visited_graphs: &'v HashTrieSetSync<&'a D::Subject>,
 }
 
 impl<'a, 'v, I: Interpretation, D> LinkedDataResource<I> for NamedGraphView<'a, 'v, D>
 where
-	I::Resource: LinkedDataResource<I> + rdfx::Resource,
+	I::Resource: Eq + Hash + LinkedDataResource<I> + rdfx::Resource,
 	D: rdfx::dataset::Dataset + Graph<Subject = I::Resource> + PatternMatchingDataset,
 {
 	fn interpretation(&self, interpretation: &mut I) -> ResourceInterpretation<'_, I> {
@@ -320,7 +323,7 @@ where
 	where
 		S: GraphVisitor<I>,
 	{
-		let mut visited_subjects = im::HashSet::new();
+		let mut visited_subjects = HashTrieSetSync::new_sync();
 		let mut graph_subjects = Vec::new();
 
 		for subject in self.dataset.subjects() {
@@ -332,7 +335,7 @@ where
 				.next()
 				.is_some()
 			{
-				visited_subjects.insert(subject);
+				visited_subjects.insert_mut(subject);
 				graph_subjects.push(subject);
 			}
 		}
