@@ -1,4 +1,4 @@
-use educe::Educe;
+use derive_more::Debug;
 use iri_rs::IriBuf;
 use rdfx::{
 	BlankId, BlankIdBuf, Id, Interpretation, Literal, LocalTerm, Term,
@@ -9,8 +9,8 @@ use std::fmt;
 use crate::{BorrowedRdfTerm, CowRdfTerm, OwnedRdfTerm};
 
 /// Resource interpretation.
-#[derive(Educe)]
-#[educe(Debug(bound = "I::Resource: fmt::Debug"))]
+#[derive(Debug)]
+#[debug(bound(I::Resource: fmt::Debug))]
 pub enum ResourceInterpretation<'a, I: Interpretation> {
 	/// Interpreted resource.
 	Interpreted(&'a I::Resource),

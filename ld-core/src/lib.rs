@@ -47,7 +47,8 @@
 //! - `derive` (default) — the [`Serialize`] and [`Deserialize`] derive macros.
 //! - `serde` (default) — `serde` interop, including the [`json_literal!`]
 //!   macro that maps a `serde` type onto an `rdf:JSON` literal.
-use educe::Educe;
+use derive_more::Debug;
+use derive_where::derive_where;
 use iri_rs::{Iri, IriBuf};
 #[cfg(feature = "derive")]
 pub use ld_core_derive::{Deserialize, Serialize};
@@ -255,8 +256,9 @@ impl<I: Interpretation, S: Visitor<I>> Visitor<I> for &mut S {
 	}
 }
 
-#[derive(Educe)]
-#[educe(Debug(bound = "I::Resource: core::fmt::Debug"), Clone, Copy)]
+#[derive(Debug)]
+#[debug(bound(I::Resource: core::fmt::Debug))]
+#[derive_where(Clone, Copy)]
 /// Reference to a resource, either interpreted or lexical.
 pub enum ResourceOrIriRef<'a, I: Interpretation> {
 	/// A resource of the interpretation.
@@ -281,8 +283,9 @@ impl<'a, I: Interpretation> ResourceOrIriRef<'a, I> {
 	}
 }
 
-#[derive(Educe)]
-#[educe(Debug(bound = "I::Resource: core::fmt::Debug"), Clone, Copy)]
+#[derive(Debug)]
+#[debug(bound(I::Resource: core::fmt::Debug))]
+#[derive_where(Clone, Copy)]
 /// Position a value occupies while being visited, used to report errors.
 #[derive(Default)]
 pub enum Context<'a, I: Interpretation> {

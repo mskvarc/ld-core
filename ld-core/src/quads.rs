@@ -1,4 +1,4 @@
-use educe::Educe;
+use derive_where::derive_where;
 use iri_rs::IriBuf;
 use rdfx::generator::LocalGeneratorInterpretation;
 use rdfx::{
@@ -675,8 +675,7 @@ struct QuadPropertiesSerializer<'a, I: Interpretation, D: Domain<I>> {
 	subject: SubjectOrObject<'a, I, D>,
 }
 
-#[derive(Educe)]
-#[educe(Clone, Copy)]
+#[derive_where(Clone, Copy)]
 enum SubjectOrObject<'a, I: Interpretation, D: Domain<I>> {
 	Subject(&'a D::Subject),
 	Object(&'a D::Object),
