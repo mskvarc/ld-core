@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [v0.5.0] - 2026-09-12
 
 ### 🐛 Bug Fixes
+- correct version
 - clippy warnings
 
 ### 🔧 Refactor
@@ -12,6 +13,7 @@ All notable changes to this project will be documented in this file.
 - get rid of unmaintained dependency
 
 ### 🧹 Chores
+- update changelog
 - bump version
 - update deps
 
