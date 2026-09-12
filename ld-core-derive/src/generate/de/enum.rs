@@ -263,12 +263,11 @@ fn variant_shape(fields: &syn::Fields) -> VariantShape<'_> {
 		syn::Fields::Unnamed(unnamed_fields) => {
 			let mut fields_iter = unnamed_fields.unnamed.iter();
 
-			if let Some(field) = fields_iter.next() {
-				if fields_iter.next().is_none()
-					&& !field.attrs.iter().any(|attr| attr.path().is_ident("ld"))
-				{
-					return VariantShape::Simple(&field.ty);
-				}
+			if let Some(field) = fields_iter.next()
+				&& fields_iter.next().is_none()
+				&& !field.attrs.iter().any(|attr| attr.path().is_ident("ld"))
+			{
+				return VariantShape::Simple(&field.ty);
 			}
 
 			VariantShape::Compound

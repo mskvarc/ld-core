@@ -843,17 +843,16 @@ fn variant_shape(
 		syn::Fields::Unnamed(unnamed_fields) => {
 			let mut fields_iter = unnamed_fields.unnamed.iter();
 
-			if let Some(field) = fields_iter.next() {
-				if fields_iter.next().is_none()
-					&& !field.attrs.iter().any(|attr| attr.path().is_ident("ld"))
-				{
-					let accessor = match &field.ident {
-						Some(id) => id.clone(),
-						None => format_ident!("a0"),
-					};
+			if let Some(field) = fields_iter.next()
+				&& fields_iter.next().is_none()
+				&& !field.attrs.iter().any(|attr| attr.path().is_ident("ld"))
+			{
+				let accessor = match &field.ident {
+					Some(id) => id.clone(),
+					None => format_ident!("a0"),
+				};
 
-					return Ok(VariantShape::Simple(accessor, field.ty.clone()));
-				}
+				return Ok(VariantShape::Simple(accessor, field.ty.clone()));
 			}
 
 			Ok(VariantShape::Compound(variant_subject_type(

@@ -16,10 +16,10 @@ impl UsesGenericParam for syn::Type {
 			Self::Path(t) => t.uses_generic_param(p),
 			Self::Ptr(t) => t.elem.uses_generic_param(p),
 			Self::Reference(t) => {
-				if let Some(l) = &t.lifetime {
-					if l.uses_generic_param(p) {
-						return true;
-					}
+				if let Some(l) = &t.lifetime
+					&& l.uses_generic_param(p)
+				{
+					return true;
 				}
 
 				t.elem.uses_generic_param(p)
@@ -34,10 +34,10 @@ impl UsesGenericParam for syn::Type {
 
 impl UsesGenericParam for syn::TypePath {
 	fn uses_generic_param(&self, p: &syn::GenericParam) -> bool {
-		if let Some(qself) = &self.qself {
-			if qself.ty.uses_generic_param(p) {
-				return true;
-			}
+		if let Some(qself) = &self.qself
+			&& qself.ty.uses_generic_param(p)
+		{
+			return true;
 		}
 
 		self.path.uses_generic_param(p)
@@ -80,10 +80,11 @@ impl UsesGenericParam for syn::TraitBound {
 
 impl UsesGenericParam for syn::Path {
 	fn uses_generic_param(&self, p: &syn::GenericParam) -> bool {
-		if let syn::GenericParam::Type(t) = p {
-			if self.segments.len() == 1 && self.segments.first().unwrap().ident == t.ident {
-				return true;
-			}
+		if let syn::GenericParam::Type(t) = p
+			&& self.segments.len() == 1
+			&& self.segments.first().unwrap().ident == t.ident
+		{
+			return true;
 		}
 
 		self.segments.iter().any(|s| s.uses_generic_param(p))
@@ -117,10 +118,10 @@ impl UsesGenericParam for syn::GenericArgument {
 
 impl UsesGenericParam for syn::AssocType {
 	fn uses_generic_param(&self, p: &syn::GenericParam) -> bool {
-		if let Some(generics) = &self.generics {
-			if generics.args.iter().any(|a| a.uses_generic_param(p)) {
-				return true;
-			}
+		if let Some(generics) = &self.generics
+			&& generics.args.iter().any(|a| a.uses_generic_param(p))
+		{
+			return true;
 		}
 
 		self.ty.uses_generic_param(p)
@@ -129,10 +130,10 @@ impl UsesGenericParam for syn::AssocType {
 
 impl UsesGenericParam for syn::Constraint {
 	fn uses_generic_param(&self, p: &syn::GenericParam) -> bool {
-		if let Some(generics) = &self.generics {
-			if generics.args.iter().any(|a| a.uses_generic_param(p)) {
-				return true;
-			}
+		if let Some(generics) = &self.generics
+			&& generics.args.iter().any(|a| a.uses_generic_param(p))
+		{
+			return true;
 		}
 
 		self.bounds.iter().any(|b| b.uses_generic_param(p))

@@ -55,8 +55,8 @@ macro_rules! json_literal {
 					Some(object) => {
 						if objects.next().is_none() {
 							<Self as $crate::LinkedDataDeserializeSubject<I>>::deserialize_subject_in(
-																						interpretation, dataset, graph, object, context,
-																					)
+																								interpretation, dataset, graph, object, context,
+																							)
 						} else {
 							Err($crate::FromLinkedDataError::TooManyValues(
 								context.into_iris(interpretation),
