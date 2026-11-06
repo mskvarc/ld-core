@@ -20,20 +20,32 @@ derive = ["dep:ld-core-derive"]
 serde = ["dep:serde"]
 
 [dependencies]
-derive-where = "1.6.1"
+derive-where = "1.7.0"
 derive_more = { version = "2.1.1", features = ["debug"] }
 iri-rs = { version = "4.0.0", features = ["static"] }
-jstrict = { version = "0.16.0", features = ["canonicalize"] }
+jstrict = { version = "0.16.1", features = ["canonicalize"] }
 ld-core-derive = { workspace = true, optional = true }
 rdfx = "0.25.0"
 rpds = "1.2.1"
 serde = { version = "1.0.229", features = ["derive"], optional = true }
-thiserror = "2.0.20"
+thiserror = "2.0.21"
 xsd-rs = "0.11.0"
 
 [dev-dependencies]
-jstrict = { version = "0.16.0", features = ["serde"] }
+jstrict = { version = "0.16.1", features = ["serde"] }
 
 [[example]]
 name = "derive"
+required-features = ["derive"]
+
+[[example]]
+name = "derive_enum"
+required-features = ["derive"]
+
+[[example]]
+name = "generics"
+required-features = ["derive"]
+
+[[example]]
+name = "graph"
 required-features = ["derive"]
