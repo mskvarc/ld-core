@@ -10,7 +10,8 @@
 //!
 //! # Example
 //!
-//! ```
+#![cfg_attr(feature = "derive", doc = "```")]
+#![cfg_attr(not(feature = "derive"), doc = "```ignore")]
 //! use iri_rs::IriBuf;
 //! use ld_core::rdfx::{RdfDisplay, generator};
 //! use ld_core::{Deserialize, Serialize, to_quads};

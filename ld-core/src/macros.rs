@@ -141,7 +141,7 @@ macro_rules! json_literal {
 	};
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serde"))]
 mod test {
 	#[derive(Debug, serde::Serialize, serde::Deserialize)]
 	struct Test {
