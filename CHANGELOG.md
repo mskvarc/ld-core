@@ -2,9 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.7.0] - 2026-11-06
+
+### 🐛 Bug Fixes
+- build tests without default features
+
+### 🚀 Features
+- move to iri-rs 4 ⚠️ **BREAKING**
+
+### 🧹 Chores
+- update dependencies
+- bump version
+
 ## [v0.6.0] - 2026-10-06
 
 ### 🧹 Chores
+- update changelog
 - move to jstrict 0.16
 
 ## [v0.5.0] - 2026-09-12
