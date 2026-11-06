@@ -18,7 +18,7 @@ all-features = true
 proc-macro = true
 
 [dependencies]
-iri-rs = { version = "3.4.1", features = ["static"] }
+iri-rs = { version = "4.0.0", features = ["static"] }
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
 syn = "3.0.5"
